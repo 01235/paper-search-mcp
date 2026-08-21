@@ -1,6 +1,53 @@
 # tests/test_arxiv.py
 import unittest
+from unittest.mock import patch
 from paper_search_mcp.academic_platforms.arxiv import ArxivSearcher, _build_search_query
+
+
+class TestCourtesyPacing(unittest.TestCase):
+    """No previous mechanism enforced arXiv's documented 3-second minimum
+    request interval *between* calls (only backoff *within* one already-
+    failed call's retries) -- confirmed by triggering arXiv's own rate
+    limiter with a handful of rapid manual requests, 2026-08-21.
+    """
+
+    def test_first_request_does_not_wait(self):
+        searcher = ArxivSearcher()
+        with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep:
+            searcher._wait_for_courtesy_window()
+        mock_sleep.assert_not_called()
+
+    def test_second_request_waits_out_the_remaining_window(self):
+        searcher = ArxivSearcher()
+        # fake_now advances by 0.1s per time.monotonic() call so the two
+        # _wait_for_courtesy_window() calls don't collapse to one instant.
+        fake_now = [100.0]
+
+        def advancing_monotonic():
+            fake_now[0] += 0.1
+            return fake_now[0]
+
+        with (
+            patch("paper_search_mcp.academic_platforms.arxiv.time.monotonic", side_effect=advancing_monotonic),
+            patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep,
+        ):
+            searcher._wait_for_courtesy_window()
+            searcher._wait_for_courtesy_window()
+
+        mock_sleep.assert_called_once()
+        (waited,) = mock_sleep.call_args.args
+        self.assertAlmostEqual(waited, ArxivSearcher._MIN_REQUEST_INTERVAL - 0.1, places=6)
+
+    def test_request_after_the_window_has_elapsed_does_not_wait(self):
+        searcher = ArxivSearcher()
+        searcher._last_request_at = 0.0
+        with patch(
+            "paper_search_mcp.academic_platforms.arxiv.time.monotonic",
+            return_value=ArxivSearcher._MIN_REQUEST_INTERVAL + 10,
+        ):
+            with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep:
+                searcher._wait_for_courtesy_window()
+        mock_sleep.assert_not_called()
 
 
 class TestBuildSearchQuery(unittest.TestCase):

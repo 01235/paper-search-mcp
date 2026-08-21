@@ -4,6 +4,7 @@ from datetime import datetime
 import re
 import requests
 import feedparser
+import threading
 import time
 from ..paper import Paper
 from ..utils import extract_doi
@@ -50,12 +51,35 @@ class ArxivSearcher(PaperSource):
     # redirect that may never resolve.
     BASE_URL = "https://export.arxiv.org/api/query"
 
+    # arXiv's API courtesy policy asks for no more than one request every 3
+    # seconds: https://arxiv.org/help/api/user-manual#Quickstart . Nothing
+    # previously enforced this *between* calls -- only backoff *within* one
+    # already-failed call's retries -- so back-to-back search() calls (an
+    # agent querying several topics in a row, or just rapid manual testing)
+    # could outrun arXiv's own rate limiter on their own. This class is
+    # instantiated once and reused for the server's whole lifetime (see the
+    # module-level `arxiv_searcher` in server.py), so instance-level pacing
+    # state actually protects real usage, not just one call.
+    _MIN_REQUEST_INTERVAL = 3.0
+
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
             'Accept': 'application/atom+xml, application/xml;q=0.9, */*;q=0.8',
         })
+        self._last_request_at = 0.0
+        self._pacing_lock = threading.Lock()
+
+    def _wait_for_courtesy_window(self) -> None:
+        """Block until at least _MIN_REQUEST_INTERVAL has passed since this
+        instance's last request to BASE_URL.
+        """
+        with self._pacing_lock:
+            wait = self._MIN_REQUEST_INTERVAL - (time.monotonic() - self._last_request_at)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_request_at = time.monotonic()
 
     def search(self, query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> List[Paper]:
         params = {
@@ -66,6 +90,7 @@ class ArxivSearcher(PaperSource):
         }
         response = None
         for attempt in range(3):
+            self._wait_for_courtesy_window()
             try:
                 response = self.session.get(self.BASE_URL, params=params, timeout=30)
             except requests.RequestException:
