@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Optional, Dict, Any
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import requests
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ class HALSearcher(PaperSource):
                 - ``year`` (int): Filter by exact publication year.
                 - ``doctype`` (str): Document type, e.g. ``"ART"`` (journal article),
                   ``"COMM"`` (conference paper), ``"THESE"`` (thesis), etc.
-                - ``domain`` (str): HAL science domain code, e.g. ``"spi"`` (engineering),
+                - ``domain`` (str): HAL science domain code, e.g. ``"spi"``
+                    (engineering),
                   ``"math"``, ``"sdv"`` (life sciences).
 
         Returns:
@@ -224,9 +226,11 @@ class HALSearcher(PaperSource):
 
             authors_field = doc.get("authFullName_s", [])
             if isinstance(authors_field, list):
-                authors = ", ".join(authors_field)
+                authors = [str(a) for a in authors_field]
+            elif authors_field:
+                authors = [str(authors_field)]
             else:
-                authors = str(authors_field)
+                authors = []
 
             abstract_field = doc.get("abstract_s", [])
             if isinstance(abstract_field, list):
@@ -239,9 +243,16 @@ class HALSearcher(PaperSource):
                 doi = doi[0] if doi else ""
 
             year = doc.get("publicationDateY_i") or doc.get("producedDateY_i", "")
-            pub_date = (
+            pub_date_str = (
                 str(year) if year else (doc.get("submittedDate_s", "") or "")[:10]
             )
+            published_date = None
+            for date_format in ("%Y-%m-%d", "%Y"):
+                try:
+                    published_date = datetime.strptime(pub_date_str, date_format)
+                    break
+                except ValueError:
+                    continue
 
             pdf_url = doc.get("fileMain_s", "") or ""
             record_url = doc.get("uri_s", f"https://hal.archives-ouvertes.fr/{hal_id}")
@@ -252,7 +263,7 @@ class HALSearcher(PaperSource):
                 authors=authors,
                 abstract=abstract.strip(),
                 doi=doi,
-                published_date=str(pub_date),
+                published_date=published_date,
                 pdf_url=pdf_url,
                 url=record_url,
                 source="hal",

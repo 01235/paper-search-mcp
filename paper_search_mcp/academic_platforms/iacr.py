@@ -1,15 +1,16 @@
-from typing import List, Optional
+import logging
+import os
+import random
 from datetime import datetime
+from typing import List, Optional
+
 import requests
 from bs4 import BeautifulSoup
-import time
-import random
+from pypdf import PdfReader
+
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-import logging
-from pypdf import PdfReader
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ class IACRSearcher(PaperSource):
                     return detailed_paper
                 else:
                     logger.warning(
-                        f"Could not fetch details for {paper_id}, falling back to search result parsing"
+                        f"Could not fetch details for {paper_id}, falling "
+                        "back to search result parsing"
                     )
 
             # Fallback: parse from search results if detailed fetch fails or is disabled
@@ -140,7 +142,7 @@ class IACRSearcher(PaperSource):
             return None
 
     def search(
-        self, query: str, max_results: int = 10, fetch_details: bool = True
+        self, query: str, max_results: int = 10, fetch_details: bool = True, **kwargs
     ) -> List[Paper]:
         """
         Search IACR ePrint Archive
@@ -148,7 +150,8 @@ class IACRSearcher(PaperSource):
         Args:
             query: Search query string
             max_results: Maximum number of results to return
-            fetch_details: Whether to fetch detailed information for each paper (slower but more complete)
+            fetch_details: Whether to fetch detailed information for each paper
+                (slower but more complete)
 
         Returns:
             List[Paper]: List of paper objects
@@ -488,12 +491,9 @@ if __name__ == "__main__":
             print(f"Title: {paper_details.title}")
             print(f"Authors: {', '.join(paper_details.authors)}")
             print(f"Keywords: {', '.join(paper_details.keywords)}")
-            print(
-                f"Publication Info: {paper_details.extra.get('publication_info', 'N/A') if paper_details.extra else 'N/A'}"
-            )
-            print(
-                f"History: {paper_details.extra.get('history', 'N/A') if paper_details.extra else 'N/A'}"
-            )
+            extra = paper_details.extra or {}
+            print(f"Publication Info: {extra.get('publication_info', 'N/A')}")
+            print(f"History: {extra.get('history', 'N/A')}")
             print(f"Abstract: {paper_details.abstract[:200]}...")
         else:
             print(f"Could not fetch details for paper {test_paper_id}")

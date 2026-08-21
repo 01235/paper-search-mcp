@@ -1,17 +1,18 @@
-from typing import List, Optional
-from datetime import datetime
+import logging
 import os
-import requests
-from bs4 import BeautifulSoup
-import time
 import random
+import re
+import time
+from datetime import datetime
+from typing import List, Optional, Union
+
+import requests
+from pypdf import PdfReader
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-import logging
-from pypdf import PdfReader
-import re
-from ..config import get_env
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class SemanticSearcher(PaperSource):
         return ""
 
     def _parse_paper(self, item) -> Optional[Paper]:
-        """Parse single paper entry from Semantic Scholar HTML and optionally fetch detailed info"""
+        """Parse a Semantic Scholar HTML entry, optionally fetching detailed info."""
         try:
             authors = [author["name"] for author in item.get("authors", [])]
 
@@ -148,17 +149,19 @@ class SemanticSearcher(PaperSource):
     def get_api_key() -> Optional[str]:
         """
         Get the Semantic Scholar API key from environment variables.
-        Returns None if no API key is set or if it's empty, enabling unauthenticated access.
+        Returns None if no API key is set or if it's empty, enabling unauthenticated
+            access.
         """
         api_key = get_env("SEMANTIC_SCHOLAR_API_KEY", "")
         if not api_key or api_key.strip() == "":
             logger.warning(
-                "No SEMANTIC_SCHOLAR_API_KEY set or it's empty. Using unauthenticated access with lower rate limits."
+                "No SEMANTIC_SCHOLAR_API_KEY set or it's empty. Using "
+                "unauthenticated access with lower rate limits."
             )
             return None
         return api_key.strip()
 
-    def request_api(self, path: str, params: dict) -> dict:
+    def request_api(self, path: str, params: dict) -> Union[requests.Response, dict]:
         """
         Make a request to the Semantic Scholar API with optional API key.
         """
@@ -181,7 +184,8 @@ class SemanticSearcher(PaperSource):
                     and not has_retried_without_key
                 ):
                     logger.warning(
-                        "Semantic Scholar API key was rejected (403). Retrying without API key."
+                        "Semantic Scholar API key was rejected (403). "
+                        "Retrying without API key."
                     )
                     api_key = None
                     has_retried_without_key = True
@@ -197,18 +201,22 @@ class SemanticSearcher(PaperSource):
                             else retry_delay * (2**attempt)
                         )
                         logger.warning(
-                            f"Rate limited (429). Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}"
+                            f"Rate limited (429). Waiting {wait_time} seconds "
+                            f"before retry {attempt + 1}/{max_retries}"
                         )
                         time.sleep(wait_time)
                         continue
                     else:
                         logger.error(
-                            f"Rate limited (429) after {max_retries} attempts. Please wait before making more requests."
+                            f"Rate limited (429) after {max_retries} attempts. "
+                            "Please wait before making more requests."
                         )
                         return {
                             "error": "rate_limited",
                             "status_code": 429,
-                            "message": "Too many requests. Please wait before retrying.",
+                            "message": (
+                                "Too many requests. Please wait before retrying."
+                            ),
                         }
 
                 response.raise_for_status()
@@ -221,7 +229,8 @@ class SemanticSearcher(PaperSource):
                     and not has_retried_without_key
                 ):
                     logger.warning(
-                        "Semantic Scholar API key was rejected (403). Retrying without API key."
+                        "Semantic Scholar API key was rejected (403). "
+                        "Retrying without API key."
                     )
                     api_key = None
                     has_retried_without_key = True
@@ -235,18 +244,22 @@ class SemanticSearcher(PaperSource):
                             else retry_delay * (2**attempt)
                         )
                         logger.warning(
-                            f"Rate limited (429). Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}"
+                            f"Rate limited (429). Waiting {wait_time} seconds "
+                            f"before retry {attempt + 1}/{max_retries}"
                         )
                         time.sleep(wait_time)
                         continue
                     else:
                         logger.error(
-                            f"Rate limited (429) after {max_retries} attempts. Please wait before making more requests."
+                            f"Rate limited (429) after {max_retries} attempts. "
+                            "Please wait before making more requests."
                         )
                         return {
                             "error": "rate_limited",
                             "status_code": 429,
-                            "message": "Too many requests. Please wait before retrying.",
+                            "message": (
+                                "Too many requests. Please wait before retrying."
+                            ),
                         }
                 else:
                     logger.error(f"HTTP Error requesting API: {e}")
@@ -270,6 +283,7 @@ class SemanticSearcher(PaperSource):
         year: Optional[str] = None,
         max_results: int = 10,
         fetch_details: bool = False,
+        **kwargs,
     ) -> List[Paper]:
         """
         Search Semantic Scholar
@@ -283,8 +297,10 @@ class SemanticSearcher(PaperSource):
             - Until year: "-2015"
             max_results: Maximum number of results to return
             fetch_details: Backward-compatible flag retained for older callers.
-                Semantic search responses already include the fields this connector uses,
-                so the current implementation does not perform extra per-paper detail fetches.
+                Semantic search responses already include the fields this connector
+                    uses,
+                so the current implementation does not perform extra per-paper
+                    detail fetches.
 
         Returns:
             List[Paper]: List of paper objects
@@ -325,7 +341,10 @@ class SemanticSearcher(PaperSource):
                 return papers
 
             # Check response status code
-            if not hasattr(response, "status_code") or response.status_code != 200:
+            if (
+                not isinstance(response, requests.Response)
+                or response.status_code != 200
+            ):
                 status_code = getattr(response, "status_code", "unknown")
                 logger.error(
                     f"Semantic Scholar search failed with status {status_code}"
@@ -518,10 +537,14 @@ class SemanticSearcher(PaperSource):
                 return None
 
             # Check response status code
-            if not hasattr(response, "status_code") or response.status_code != 200:
+            if (
+                not isinstance(response, requests.Response)
+                or response.status_code != 200
+            ):
                 status_code = getattr(response, "status_code", "unknown")
                 logger.error(
-                    f"Semantic Scholar paper details fetch failed with status {status_code}"
+                    "Semantic Scholar paper details fetch failed with "
+                    f"status {status_code}"
                 )
                 return None
 

@@ -1,10 +1,12 @@
-from typing import List, Optional
-from datetime import datetime
-import requests
 import logging
+from datetime import datetime
+from typing import List
+
+import requests
+
 from ..paper import Paper
-from .base import PaperSource
 from ..utils import extract_doi
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ class OpenAlexSearcher(PaperSource):
             logger.warning(f"Error reconstructing OpenAlex abstract: {e}")
             return ""
 
-    def search(self, query: str, max_results: int = 10) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
         """
         Search OpenAlex works. Uses the 'search' filter.
 
@@ -60,9 +62,11 @@ class OpenAlexSearcher(PaperSource):
             }
 
             response = self.session.get(self.BASE_URL, params=params, timeout=30)
-            
+
             if response.status_code != 200:
-                logger.error(f"OpenAlex search failed with status {response.status_code}")
+                logger.error(
+                    f"OpenAlex search failed with status {response.status_code}"
+                )
                 return papers
 
             data = response.json()

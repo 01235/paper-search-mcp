@@ -17,9 +17,9 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from .base import PaperSource
-from ..paper import Paper
 from ..config import get_env
+from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,8 @@ class IEEESearcher(PaperSource):
         self.api_key: str = get_env("IEEE_API_KEY", "")
         if not self.api_key:
             logger.warning(
-                "IEEESearcher initialised without PAPER_SEARCH_MCP_IEEE_API_KEY/IEEE_API_KEY.  "
+                "IEEESearcher initialised without "
+                "PAPER_SEARCH_MCP_IEEE_API_KEY/IEEE_API_KEY.  "
                 "All calls will raise NotImplementedError until the key is set."
             )
 
@@ -80,7 +81,9 @@ class IEEESearcher(PaperSource):
         )
 
     def download_pdf(self, paper_id: str, save_path: str = "./downloads") -> str:
-        """Download a PDF from IEEE Xplore — requires IEEE API key env and institutional access.
+        """Download a PDF from IEEE Xplore.
+
+        Requires IEEE API key env and institutional access.
 
         Raises:
             NotImplementedError: Always, until key + download logic are implemented.
@@ -102,6 +105,4 @@ class IEEESearcher(PaperSource):
         if not self.is_configured():
             raise NotImplementedError(_NOT_CONFIGURED_MSG)
 
-        raise NotImplementedError(
-            "IEEE Xplore paper reading is not yet implemented."
-        )
+        raise NotImplementedError("IEEE Xplore paper reading is not yet implemented.")

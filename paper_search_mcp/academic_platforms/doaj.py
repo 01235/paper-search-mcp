@@ -7,15 +7,16 @@ access to high quality, open access, peer-reviewed journals.
 API Documentation: https://doaj.org/api/v2
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
 import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
-from ..paper import Paper
-from ..utils import extract_doi
+
+import requests
+
 from ..config import get_env
+from ..paper import Paper
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,12 @@ class DOAJSearcher(PaperSource):
         """
         self.api_key = api_key or get_env("DOAJ_API_KEY", "")
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': self.USER_AGENT,
-            'Accept': 'application/json'
-        })
+        self.session.headers.update(
+            {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
+        )
 
         if self.api_key:
-            self.session.headers.update({'X-API-Key': self.api_key})
+            self.session.headers.update({"X-API-Key": self.api_key})
             logger.info("DOAJ API key configured")
         else:
             logger.warning(
@@ -84,40 +84,32 @@ class DOAJSearcher(PaperSource):
             # Build Lucene query
             lucene_query = self._build_lucene_query(query, kwargs)
 
-            params = {
-                'page': page,
-                'pageSize': page_size,
-                'query': lucene_query
-            }
+            params = {"page": page, "pageSize": page_size, "query": lucene_query}
 
             # Add sorting
-            if 'sort' in kwargs:
-                params['sort'] = kwargs['sort']
-                if 'sort_dir' in kwargs and kwargs['sort_dir'] in ('asc', 'desc'):
-                    params['sort_dir'] = kwargs['sort_dir']
+            if "sort" in kwargs:
+                params["sort"] = kwargs["sort"]
+                if "sort_dir" in kwargs and kwargs["sort_dir"] in ("asc", "desc"):
+                    params["sort_dir"] = kwargs["sort_dir"]
 
             # Make request to DOAJ API
             encoded_query = quote(query.strip() or "*", safe="")
             search_url = f"{self.BASE_URL}/search/articles/{encoded_query}"
-            response = self.session.get(
-                search_url,
-                params=params,
-                timeout=30
-            )
+            response = self.session.get(search_url, params=params, timeout=30)
             response.raise_for_status()
 
             data = response.json()
 
             # Check for API errors
-            if 'error' in data:
+            if "error" in data:
                 logger.error(f"DOAJ API error: {data['error']}")
                 return papers
 
-            total = data.get('total', 0)
+            total = data.get("total", 0)
             logger.info(f"DOAJ search found {total} total results")
 
             # Parse results
-            results = data.get('results', [])
+            results = data.get("results", [])
             for item in results:
                 if len(papers) >= max_results:
                     break
@@ -136,7 +128,7 @@ class DOAJSearcher(PaperSource):
 
         except requests.exceptions.RequestException as e:
             logger.error(f"DOAJ API request failed: {e}")
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 logger.error(f"Response status: {e.response.status_code}")
                 if e.response.status_code == 429:
                     logger.warning("DOAJ rate limit exceeded. Consider using API key.")
@@ -167,43 +159,43 @@ class DOAJSearcher(PaperSource):
             query_parts.append(f"({query})")
 
         # Add year filter
-        if 'year' in filters and filters['year']:
-            year = filters['year']
-            if isinstance(year, str) and '-' in year:
+        if "year" in filters and filters["year"]:
+            year = filters["year"]
+            if isinstance(year, str) and "-" in year:
                 # Year range
-                year_range = year.split('-')
+                year_range = year.split("-")
                 if len(year_range) == 2:
                     query_parts.append(f"year:[{year_range[0]} TO {year_range[1]}]")
             else:
                 query_parts.append(f"year:{year}")
 
         # Add journal filter
-        if 'journal' in filters and filters['journal']:
-            journal = filters['journal']
+        if "journal" in filters and filters["journal"]:
+            journal = filters["journal"]
             # Try as ISSN first, then as title
-            if len(journal) == 9 and '-' in journal:  # ISSN format: 1234-5678
+            if len(journal) == 9 and "-" in journal:  # ISSN format: 1234-5678
                 query_parts.append(f"issn:{journal}")
             else:
                 query_parts.append(f"journal.title:{journal}")
 
         # Add publisher filter
-        if 'publisher' in filters and filters['publisher']:
+        if "publisher" in filters and filters["publisher"]:
             query_parts.append(f"publisher:{filters['publisher']}")
 
         # Add country filter
-        if 'country' in filters and filters['country']:
+        if "country" in filters and filters["country"]:
             query_parts.append(f"country:{filters['country']}")
 
         # Add language filter
-        if 'language' in filters and filters['language']:
+        if "language" in filters and filters["language"]:
             query_parts.append(f"language:{filters['language']}")
 
         # Add subject filter
-        if 'subject' in filters and filters['subject']:
+        if "subject" in filters and filters["subject"]:
             query_parts.append(f"subject:{filters['subject']}")
 
         # DOAJ only contains open access content, but we can still filter
-        if 'open_access' in filters and filters['open_access'] is not None:
+        if "open_access" in filters and filters["open_access"] is not None:
             # DOAJ is all open access, but we can filter by license type
             pass
 
@@ -223,44 +215,44 @@ class DOAJSearcher(PaperSource):
             Paper object or None if parsing fails
         """
         try:
-            bibjson = item.get('bibjson', {})
+            bibjson = item.get("bibjson", {})
             if not bibjson:
                 return None
 
             # Extract title
-            title = bibjson.get('title', '')
+            title = bibjson.get("title", "")
             if not title:
                 return None
 
             # Extract authors
             authors = []
-            author_list = bibjson.get('author', [])
+            author_list = bibjson.get("author", [])
             for author in author_list:
-                name = author.get('name', '')
+                name = author.get("name", "")
                 if name:
                     authors.append(name.strip())
 
             # Extract abstract
-            abstract = ''
-            abstract_elem = bibjson.get('abstract')
+            abstract = ""
+            abstract_elem = bibjson.get("abstract")
             if isinstance(abstract_elem, str):
                 abstract = abstract_elem
             elif isinstance(abstract_elem, dict):
-                abstract = abstract_elem.get('text', '')
+                abstract = abstract_elem.get("text", "")
 
             # Extract DOI
-            doi = ''
-            identifiers = bibjson.get('identifier', [])
+            doi = ""
+            identifiers = bibjson.get("identifier", [])
             for ident in identifiers:
-                if ident.get('type') == 'doi' and ident.get('id'):
-                    doi = ident['id']
+                if ident.get("type") == "doi" and ident.get("id"):
+                    doi = ident["id"]
                     break
 
             # Extract publication date
             published_date = None
-            year = bibjson.get('year')
-            month = bibjson.get('month', 1)
-            day = bibjson.get('day', 1)
+            year = bibjson.get("year")
+            month = bibjson.get("month", 1)
+            day = bibjson.get("day", 1)
 
             if year:
                 try:
@@ -273,44 +265,50 @@ class DOAJSearcher(PaperSource):
                         pass
 
             # Extract journal information
-            journal = bibjson.get('journal', {})
-            journal_title = journal.get('title', '')
-            journal_issn = journal.get('issn', '')
+            journal = bibjson.get("journal", {})
+            journal_title = journal.get("title", "")
+            journal_issn = journal.get("issn", "")
             if isinstance(journal_issn, list):
-                journal_issn = journal_issn[0] if journal_issn else ''
+                journal_issn = journal_issn[0] if journal_issn else ""
 
             # Extract keywords
             keywords = []
-            keywords_list = bibjson.get('keywords', [])
+            keywords_list = bibjson.get("keywords", [])
             if isinstance(keywords_list, list):
-                keywords = [kw.strip() for kw in keywords_list if isinstance(kw, str) and kw.strip()]
+                keywords = [
+                    kw.strip()
+                    for kw in keywords_list
+                    if isinstance(kw, str) and kw.strip()
+                ]
 
             # Extract subject categories
             categories = []
-            subject_list = bibjson.get('subject', [])
+            subject_list = bibjson.get("subject", [])
             if isinstance(subject_list, list):
-                categories = [sub.get('term', '') for sub in subject_list if isinstance(sub, dict)]
+                categories = [
+                    sub.get("term", "") for sub in subject_list if isinstance(sub, dict)
+                ]
                 categories = [cat for cat in categories if cat]
 
             # Extract links (PDF and HTML)
-            pdf_url = ''
-            url = item.get('admin', {}).get('url', '')
+            pdf_url = ""
+            url = item.get("admin", {}).get("url", "")
 
-            links = bibjson.get('link', [])
+            links = bibjson.get("link", [])
             for link in links:
                 if isinstance(link, dict):
-                    link_type = link.get('type', '')
-                    link_url = link.get('url', '')
-                    if link_type == 'fulltext' and link_url:
-                        if link_url.lower().endswith('.pdf'):
+                    link_type = link.get("type", "")
+                    link_url = link.get("url", "")
+                    if link_type == "fulltext" and link_url:
+                        if link_url.lower().endswith(".pdf"):
                             pdf_url = link_url
                         elif not url:
                             url = link_url
 
             # If no PDF found, check for fulltext PDF in other fields
-            if not pdf_url and 'fulltext' in bibjson:
-                fulltext = bibjson.get('fulltext')
-                if isinstance(fulltext, str) and fulltext.lower().endswith('.pdf'):
+            if not pdf_url and "fulltext" in bibjson:
+                fulltext = bibjson.get("fulltext")
+                if isinstance(fulltext, str) and fulltext.lower().endswith(".pdf"):
                     pdf_url = fulltext
 
             # Construct DOAJ URL if not available
@@ -318,13 +316,15 @@ class DOAJSearcher(PaperSource):
                 url = f"https://doi.org/{doi}"
             elif not url:
                 # Use DOAJ article page
-                article_id = item.get('id', '')
+                article_id = item.get("id", "")
                 if article_id:
                     url = f"https://doaj.org/article/{article_id}"
 
             # Create Paper object
             paper = Paper(
-                paper_id=item.get('id', '') or doi or f"doaj_{hash(title) & 0xffffffff:08x}",
+                paper_id=item.get("id", "")
+                or doi
+                or f"doaj_{hash(title) & 0xFFFFFFFF:08x}",
                 title=title,
                 authors=authors,
                 abstract=abstract,
@@ -332,23 +332,25 @@ class DOAJSearcher(PaperSource):
                 published_date=published_date,
                 pdf_url=pdf_url,
                 url=url,
-                source='doaj',
+                source="doaj",
                 categories=categories,
-                keywords=keywords
+                keywords=keywords,
             )
 
             # Add extra metadata
             paper.extra = {
-                'journal': journal_title,
-                'issn': journal_issn,
-                'publisher': journal.get('publisher', {}),
-                'country': journal.get('country', ''),
-                'language': bibjson.get('language', ''),
-                'license': bibjson.get('license', [{}])[0] if isinstance(bibjson.get('license'), list) else {},
-                'start_page': bibjson.get('start_page', ''),
-                'end_page': bibjson.get('end_page', ''),
-                'volume': bibjson.get('volume', ''),
-                'number': bibjson.get('number', '')
+                "journal": journal_title,
+                "issn": journal_issn,
+                "publisher": journal.get("publisher", {}),
+                "country": journal.get("country", ""),
+                "language": bibjson.get("language", ""),
+                "license": bibjson.get("license", [{}])[0]
+                if isinstance(bibjson.get("license"), list)
+                else {},
+                "start_page": bibjson.get("start_page", ""),
+                "end_page": bibjson.get("end_page", ""),
+                "volume": bibjson.get("volume", ""),
+                "number": bibjson.get("number", ""),
             }
 
             return paper
@@ -392,22 +394,25 @@ class DOAJSearcher(PaperSource):
 
         # Download PDF
         import os
+
         response = self.session.get(paper.pdf_url, timeout=30)
         response.raise_for_status()
 
         # Check if response is actually PDF
-        content_type = response.headers.get('content-type', '')
-        if 'pdf' not in content_type.lower() and not paper.pdf_url.lower().endswith('.pdf'):
+        content_type = response.headers.get("content-type", "")
+        if "pdf" not in content_type.lower() and not paper.pdf_url.lower().endswith(
+            ".pdf"
+        ):
             logger.warning(f"Response may not be PDF: {content_type}")
 
         os.makedirs(save_path, exist_ok=True)
 
         # Create safe filename
-        safe_id = paper_id.replace('/', '_').replace(':', '_')
+        safe_id = paper_id.replace("/", "_").replace(":", "_")
         filename = f"doaj_{safe_id}.pdf"
         output_file = os.path.join(save_path, filename)
 
-        with open(output_file, 'wb') as f:
+        with open(output_file, "wb") as f:
             f.write(response.content)
 
         logger.info(f"Downloaded PDF to {output_file}")
@@ -432,6 +437,7 @@ class DOAJSearcher(PaperSource):
 
             # Extract text from PDF
             from pypdf import PdfReader
+
             reader = PdfReader(pdf_path)
             text = ""
             for page in reader.pages:
@@ -441,14 +447,13 @@ class DOAJSearcher(PaperSource):
             return text.strip()
         except Exception as e:
             logger.error(f"Error reading DOAJ paper {paper_id}: {e}")
-            raise NotImplementedError(
-                f"Cannot read paper from DOAJ: {e}"
-            )
+            raise NotImplementedError(f"Cannot read paper from DOAJ: {e}")
 
 
 if __name__ == "__main__":
     """Test the DOAJSearcher."""
     import logging
+
     logging.basicConfig(level=logging.INFO)
 
     # Test with and without API key
@@ -456,21 +461,18 @@ if __name__ == "__main__":
 
     # Test search
     print("Testing DOAJ search...")
-    test_queries = [
-        "machine learning",
-        "open access",
-        "climate change"
-    ]
+    test_queries = ["machine learning", "open access", "climate change"]
 
     for query in test_queries[:1]:  # Test first query only
         print(f"\nSearching DOAJ for: '{query}'")
         papers = searcher.search(query, max_results=3)
         print(f"Found {len(papers)} papers")
         for i, paper in enumerate(papers):
-            print(f"{i+1}. {paper.title}")
+            print(f"{i + 1}. {paper.title}")
             print(f"   Authors: {', '.join(paper.authors[:3])}")
             print(f"   Journal: {paper.extra.get('journal', 'Unknown')}")
-            print(f"   Year: {paper.published_date.year if paper.published_date else 'Unknown'}")
+            year = paper.published_date.year if paper.published_date else "Unknown"
+            print(f"   Year: {year}")
             print(f"   DOI: {paper.doi}")
             print(f"   PDF: {'Yes' if paper.pdf_url else 'No'}")
             print()

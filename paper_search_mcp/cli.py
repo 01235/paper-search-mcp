@@ -9,28 +9,28 @@ import json
 import sys
 from typing import Any, Dict, List
 
-from .config import get_env
 from .academic_platforms.arxiv import ArxivSearcher
-from .academic_platforms.pubmed import PubMedSearcher
+from .academic_platforms.base_search import BASESearcher
 from .academic_platforms.biorxiv import BioRxivSearcher
-from .academic_platforms.medrxiv import MedRxivSearcher
-from .academic_platforms.google_scholar import GoogleScholarSearcher
-from .academic_platforms.iacr import IACRSearcher
-from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.citeseerx import CiteSeerXSearcher
+from .academic_platforms.core import CORESearcher
 from .academic_platforms.crossref import CrossRefSearcher
+from .academic_platforms.dblp import DBLPSearcher
+from .academic_platforms.doaj import DOAJSearcher
+from .academic_platforms.europepmc import EuropePMCSearcher
+from .academic_platforms.google_scholar import GoogleScholarSearcher
+from .academic_platforms.hal import HALSearcher
+from .academic_platforms.iacr import IACRSearcher
+from .academic_platforms.medrxiv import MedRxivSearcher
+from .academic_platforms.openaire import OpenAiresearcher
 from .academic_platforms.openalex import OpenAlexSearcher
 from .academic_platforms.pmc import PMCSearcher
-from .academic_platforms.core import CORESearcher
-from .academic_platforms.europepmc import EuropePMCSearcher
-from .academic_platforms.dblp import DBLPSearcher
-from .academic_platforms.openaire import OpenAiresearcher
-from .academic_platforms.citeseerx import CiteSeerXSearcher
-from .academic_platforms.doaj import DOAJSearcher
-from .academic_platforms.base_search import BASESearcher
+from .academic_platforms.pubmed import PubMedSearcher
+from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
-from .academic_platforms.hal import HALSearcher
-from .academic_platforms.ssrn import SSRNSearcher
+from .config import get_env
 
 # ---------------------------------------------------------------------------
 # Searcher registry
@@ -71,19 +71,38 @@ def _init_searchers() -> None:
     ieee_key = get_env("IEEE_API_KEY", "")
     if ieee_key:
         from .academic_platforms.ieee import IEEESearcher
+
         SEARCHERS["ieee"] = IEEESearcher()
 
     acm_key = get_env("ACM_API_KEY", "")
     if acm_key:
         from .academic_platforms.acm import ACMSearcher
+
         SEARCHERS["acm"] = ACMSearcher()
 
 
 ALL_SOURCES = [
-    "arxiv", "pubmed", "biorxiv", "medrxiv", "google_scholar", "iacr",
-    "semantic", "crossref", "openalex", "pmc", "core", "europepmc",
-    "dblp", "openaire", "citeseerx", "doaj", "base", "zenodo", "hal",
-    "ssrn", "unpaywall",
+    "arxiv",
+    "pubmed",
+    "biorxiv",
+    "medrxiv",
+    "google_scholar",
+    "iacr",
+    "semantic",
+    "crossref",
+    "openalex",
+    "pmc",
+    "core",
+    "europepmc",
+    "dblp",
+    "openaire",
+    "citeseerx",
+    "doaj",
+    "base",
+    "zenodo",
+    "hal",
+    "ssrn",
+    "unpaywall",
 ]
 
 
@@ -120,11 +139,18 @@ def _dedupe(papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # Async helpers
 # ---------------------------------------------------------------------------
 
-async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> List[Dict]:
+
+async def _async_search(
+    searcher: Any, query: str, max_results: int, **kwargs
+) -> List[Dict]:
     if kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
+        papers = await asyncio.to_thread(
+            searcher.search, query, max_results=max_results, **kwargs
+        )
     else:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
+        papers = await asyncio.to_thread(
+            searcher.search, query, max_results=max_results
+        )
     return [p.to_dict() for p in papers]
 
 
@@ -132,11 +158,19 @@ async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -
 # Commands
 # ---------------------------------------------------------------------------
 
+
 async def cmd_search(args: argparse.Namespace) -> int:
     _init_searchers()
     selected = _parse_sources(args.sources)
     if not selected:
-        print(json.dumps({"error": "No valid sources selected", "available": sorted(SEARCHERS.keys())}))
+        print(
+            json.dumps(
+                {
+                    "error": "No valid sources selected",
+                    "available": sorted(SEARCHERS.keys()),
+                }
+            )
+        )
         return 1
 
     tasks = {}
@@ -155,7 +189,7 @@ async def cmd_search(args: argparse.Namespace) -> int:
     source_counts: Dict[str, int] = {}
 
     for name, result in zip(names, results):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             errors[name] = str(result)
             source_counts[name] = 0
         else:
@@ -184,12 +218,21 @@ async def cmd_download(args: argparse.Namespace) -> int:
     source = args.source.strip().lower()
 
     if source not in SEARCHERS:
-        print(json.dumps({"error": f"Unknown source: {source}", "available": sorted(SEARCHERS.keys())}))
+        print(
+            json.dumps(
+                {
+                    "error": f"Unknown source: {source}",
+                    "available": sorted(SEARCHERS.keys()),
+                }
+            )
+        )
         return 1
 
     searcher = SEARCHERS[source]
     try:
-        result = await asyncio.to_thread(searcher.download_pdf, args.paper_id, args.save_path)
+        result = await asyncio.to_thread(
+            searcher.download_pdf, args.paper_id, args.save_path
+        )
         print(json.dumps({"status": "ok", "path": result}))
         return 0
     except Exception as e:
@@ -202,12 +245,21 @@ async def cmd_read(args: argparse.Namespace) -> int:
     source = args.source.strip().lower()
 
     if source not in SEARCHERS:
-        print(json.dumps({"error": f"Unknown source: {source}", "available": sorted(SEARCHERS.keys())}))
+        print(
+            json.dumps(
+                {
+                    "error": f"Unknown source: {source}",
+                    "available": sorted(SEARCHERS.keys()),
+                }
+            )
+        )
         return 1
 
     searcher = SEARCHERS[source]
     try:
-        text = await asyncio.to_thread(searcher.read_paper, args.paper_id, args.save_path)
+        text = await asyncio.to_thread(
+            searcher.read_paper, args.paper_id, args.save_path
+        )
         print(text)
         return 0
     except Exception as e:
@@ -225,6 +277,7 @@ async def cmd_sources(args: argparse.Namespace) -> int:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="paper-search",
@@ -233,25 +286,51 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     # search
-    p_search = sub.add_parser("search", help="Search for papers across academic platforms")
+    p_search = sub.add_parser(
+        "search", help="Search for papers across academic platforms"
+    )
     p_search.add_argument("query", help="Search query")
-    p_search.add_argument("-n", "--max-results", type=int, default=5, help="Max results per source (default: 5)")
-    p_search.add_argument("-s", "--sources", default="all",
-                          help="Comma-separated sources or 'all' (default: all)")
-    p_search.add_argument("-y", "--year", default=None,
-                          help="Year filter for Semantic Scholar (e.g. '2020', '2018-2022')")
+    p_search.add_argument(
+        "-n",
+        "--max-results",
+        type=int,
+        default=5,
+        help="Max results per source (default: 5)",
+    )
+    p_search.add_argument(
+        "-s",
+        "--sources",
+        default="all",
+        help="Comma-separated sources or 'all' (default: all)",
+    )
+    p_search.add_argument(
+        "-y",
+        "--year",
+        default=None,
+        help="Year filter for Semantic Scholar (e.g. '2020', '2018-2022')",
+    )
 
     # download
     p_dl = sub.add_parser("download", help="Download a paper PDF")
     p_dl.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_dl.add_argument("paper_id", help="Paper identifier")
-    p_dl.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_dl.add_argument(
+        "-o",
+        "--save-path",
+        default="./downloads",
+        help="Save directory (default: ./downloads)",
+    )
 
     # read
     p_read = sub.add_parser("read", help="Download and extract text from a paper")
     p_read.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_read.add_argument("paper_id", help="Paper identifier")
-    p_read.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_read.add_argument(
+        "-o",
+        "--save-path",
+        default="./downloads",
+        help="Save directory (default: ./downloads)",
+    )
 
     # sources
     sub.add_parser("sources", help="List available sources")

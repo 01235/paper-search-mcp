@@ -1,38 +1,38 @@
 # paper_search_mcp/server.py
-from typing import List, Dict, Optional, Any
 import asyncio
-import os
 import logging
+import os
 import re
+from typing import Any, Dict, List, Optional
+
 import httpx
 from mcp.server.fastmcp import FastMCP
-from .config import get_env
+
 from .academic_platforms.arxiv import ArxivSearcher
-from .academic_platforms.pubmed import PubMedSearcher
+from .academic_platforms.base_search import BASESearcher
 from .academic_platforms.biorxiv import BioRxivSearcher
-from .academic_platforms.medrxiv import MedRxivSearcher
-from .academic_platforms.google_scholar import GoogleScholarSearcher
-from .academic_platforms.iacr import IACRSearcher
-from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.citeseerx import CiteSeerXSearcher
+from .academic_platforms.core import CORESearcher
 from .academic_platforms.crossref import CrossRefSearcher
+from .academic_platforms.dblp import DBLPSearcher
+from .academic_platforms.doaj import DOAJSearcher
+from .academic_platforms.europepmc import EuropePMCSearcher
+from .academic_platforms.google_scholar import GoogleScholarSearcher
+from .academic_platforms.hal import HALSearcher
+from .academic_platforms.iacr import IACRSearcher
+from .academic_platforms.medrxiv import MedRxivSearcher
+from .academic_platforms.openaire import OpenAiresearcher
 from .academic_platforms.openalex import OpenAlexSearcher
 from .academic_platforms.pmc import PMCSearcher
-from .academic_platforms.core import CORESearcher
-from .academic_platforms.europepmc import EuropePMCSearcher
+from .academic_platforms.pubmed import PubMedSearcher
 from .academic_platforms.sci_hub import SciHubFetcher
-from .academic_platforms.dblp import DBLPSearcher
-from .academic_platforms.openaire import OpenAiresearcher
-from .academic_platforms.citeseerx import CiteSeerXSearcher
-from .academic_platforms.doaj import DOAJSearcher
-from .academic_platforms.base_search import BASESearcher
+from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
-from .academic_platforms.hal import HALSearcher
-from .academic_platforms.ssrn import SSRNSearcher
-from .utils import extract_doi
+from .config import get_env
 
 # from .academic_platforms.hub import SciHubSearcher
-from .paper import Paper
 
 # Initialize MCP server
 mcp = FastMCP("paper_search_server")
@@ -67,12 +67,18 @@ ssrn_searcher = SSRNSearcher()
 # Asynchronous helper to adapt synchronous searchers
 # Runs blocking requests-based calls in a thread pool to avoid blocking the event loop.
 async def async_search(searcher, query: str, max_results: int, **kwargs) -> List[Dict]:
-    if 'year' in kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, year=kwargs['year'])
+    if "year" in kwargs:
+        papers = await asyncio.to_thread(
+            searcher.search, query, max_results=max_results, year=kwargs["year"]
+        )
     elif kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
+        papers = await asyncio.to_thread(
+            searcher.search, query, max_results=max_results, **kwargs
+        )
     else:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
+        papers = await asyncio.to_thread(
+            searcher.search, query, max_results=max_results
+        )
     return [paper.to_dict() for paper in papers]
 
 
@@ -111,6 +117,7 @@ _acm_api_key = get_env("ACM_API_KEY", "")
 
 if _ieee_api_key:
     from .academic_platforms.ieee import IEEESearcher
+
     ieee_searcher = IEEESearcher()
     ALL_SOURCES.append("ieee")
     logger.info("IEEE Xplore enabled via configured environment key.")
@@ -119,6 +126,7 @@ else:
 
 if _acm_api_key:
     from .academic_platforms.acm import ACMSearcher
+
     acm_searcher = ACMSearcher()
     ALL_SOURCES.append("acm")
     logger.info("ACM Digital Library enabled via configured environment key.")
@@ -169,7 +177,9 @@ def _safe_filename(filename_hint: str, default: str = "paper") -> str:
     return safe[:120]
 
 
-async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = "paper") -> Optional[str]:
+async def _download_from_url(
+    pdf_url: str, save_path: str, filename_hint: str = "paper"
+) -> Optional[str]:
     if not pdf_url:
         return None
 
@@ -185,9 +195,17 @@ async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = 
             return None
 
         content_type = (response.headers.get("content-type") or "").lower()
-        is_pdf = "pdf" in content_type or response.content.startswith(b"%PDF") or pdf_url.lower().endswith(".pdf")
+        is_pdf = (
+            "pdf" in content_type
+            or response.content.startswith(b"%PDF")
+            or pdf_url.lower().endswith(".pdf")
+        )
         if not is_pdf:
-            logger.warning("Resolved URL is not a PDF candidate: %s (content-type=%s)", pdf_url, content_type)
+            logger.warning(
+                "Resolved URL is not a PDF candidate: %s (content-type=%s)",
+                pdf_url,
+                content_type,
+            )
             return None
 
         with open(output_path, "wb") as file_obj:
@@ -199,7 +217,9 @@ async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = 
         return None
 
 
-async def _try_repository_fallback(doi: str, title: str, save_path: str) -> tuple[Optional[str], str]:
+async def _try_repository_fallback(
+    doi: str, title: str, save_path: str
+) -> tuple[Optional[str], str]:
     repository_searchers = [
         ("openaire", openaire_searcher),
         ("core", core_searcher),
@@ -232,7 +252,9 @@ async def _try_repository_fallback(doi: str, title: str, save_path: str) -> tupl
 
                 raw_paper_id = getattr(paper, "paper_id", "")
                 paper_id = str(raw_paper_id or query).strip()
-                downloaded = await _download_from_url(pdf_url, save_path, f"{repo_name}_{paper_id}")
+                downloaded = await _download_from_url(
+                    pdf_url, save_path, f"{repo_name}_{paper_id}"
+                )
                 if downloaded:
                     return downloaded, ""
 
@@ -252,7 +274,8 @@ async def search_papers(
         query: Search query string.
         max_results_per_source: Max results to fetch from each selected source.
         sources: Comma-separated source names or 'all'.
-            Available: arxiv,pubmed,biorxiv,medrxiv,google_scholar,iacr,semantic,crossref,openalex,pmc,core,europepmc,dblp,openaire,citeseerx,doaj,base,zenodo,hal,ssrn,unpaywall
+            Available:
+                arxiv,pubmed,biorxiv,medrxiv,google_scholar,iacr,semantic,crossref,openalex,pmc,core,europepmc,dblp,openaire,citeseerx,doaj,base,zenodo,hal,ssrn,unpaywall
         year: Optional year filter for Semantic Scholar only.
     Returns:
         Aggregated dictionary with per-source stats, errors, and deduplicated papers.
@@ -283,11 +306,17 @@ async def search_papers(
         elif source == "google_scholar":
             task_map[source] = search_google_scholar(query, max_results_per_source)
         elif source == "iacr":
-            task_map[source] = search_iacr(query, max_results_per_source, fetch_details=False)
+            task_map[source] = search_iacr(
+                query, max_results_per_source, fetch_details=False
+            )
         elif source == "semantic":
-            task_map[source] = search_semantic(query, year=year, max_results=max_results_per_source)
+            task_map[source] = search_semantic(
+                query, year=year, max_results=max_results_per_source
+            )
         elif source == "crossref":
-            task_map[source] = search_crossref(query, max_results=max_results_per_source)
+            task_map[source] = search_crossref(
+                query, max_results=max_results_per_source
+            )
         elif source == "openalex":
             task_map[source] = search_openalex(query, max_results_per_source)
         elif source == "pmc":
@@ -316,10 +345,14 @@ async def search_papers(
             task_map[source] = search_unpaywall(query, max_results_per_source)
         elif source == "ieee":
             if ieee_searcher is not None:
-                task_map[source] = async_search(ieee_searcher, query, max_results_per_source)
+                task_map[source] = async_search(
+                    ieee_searcher, query, max_results_per_source
+                )
         elif source == "acm":
             if acm_searcher is not None:
-                task_map[source] = async_search(acm_searcher, query, max_results_per_source)
+                task_map[source] = async_search(
+                    acm_searcher, query, max_results_per_source
+                )
 
     source_names = list(task_map.keys())
     source_outputs = await asyncio.gather(*task_map.values(), return_exceptions=True)
@@ -329,7 +362,7 @@ async def search_papers(
     merged_papers: List[Dict[str, Any]] = []
 
     for source_name, output in zip(source_names, source_outputs):
-        if isinstance(output, Exception):
+        if isinstance(output, BaseException):
             errors[source_name] = str(output)
             source_results[source_name] = 0
             continue
@@ -356,23 +389,34 @@ async def search_papers(
 
 # Tool definitions
 @mcp.tool()
-async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> List[Dict]:
+async def search_arxiv(
+    query: str,
+    max_results: int = 10,
+    sort_by: str = "relevance",
+    sort_order: str = "descending",
+) -> List[Dict]:
     """Search academic papers from arXiv.
 
     Args:
         query: Search query string (e.g., 'machine learning').
         max_results: Maximum number of papers to return (default: 10).
-        sort_by: Sort criterion — 'relevance', 'submittedDate', or 'lastUpdatedDate' (default: 'relevance').
-        sort_order: Sort direction — 'descending' or 'ascending' (default: 'descending').
+        sort_by: Sort criterion — 'relevance', 'submittedDate', or 'lastUpdatedDate'
+            (default: 'relevance').
+        sort_order: Sort direction — 'descending' or 'ascending' (default:
+            'descending').
     Returns:
         List of paper metadata in dictionary format.
     """
-    papers = await async_search(arxiv_searcher, query, max_results, sort_by=sort_by, sort_order=sort_order)
+    papers = await async_search(
+        arxiv_searcher, query, max_results, sort_by=sort_by, sort_order=sort_order
+    )
     return papers if papers else []
 
 
 @mcp.tool()
-async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevance') -> List[Dict]:
+async def search_pubmed(
+    query: str, max_results: int = 10, sort: str = "relevance"
+) -> List[Dict]:
     """Search academic papers from PubMed.
 
     Args:
@@ -445,11 +489,14 @@ async def search_iacr(
     Args:
         query: Search query string (e.g., 'cryptography', 'secret sharing').
         max_results: Maximum number of papers to return (default: 10).
-        fetch_details: Whether to fetch detailed information for each paper (default: True).
+        fetch_details: Whether to fetch detailed information for each paper
+            (default: True).
     Returns:
         List of paper metadata in dictionary format.
     """
-    papers = await asyncio.to_thread(iacr_searcher.search, query, max_results, fetch_details)
+    papers = await asyncio.to_thread(
+        iacr_searcher.search, query, max_results, fetch_details
+    )
     return [paper.to_dict() for paper in papers] if papers else []
 
 
@@ -603,7 +650,9 @@ async def read_iacr_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def search_semantic(query: str, year: Optional[str] = None, max_results: int = 10) -> List[Dict]:
+async def search_semantic(
+    query: str, year: Optional[str] = None, max_results: int = 10
+) -> List[Dict]:
     """Search academic papers from Semantic Scholar.
 
     Args:
@@ -615,17 +664,18 @@ async def search_semantic(query: str, year: Optional[str] = None, max_results: i
     """
     kwargs = {}
     if year is not None:
-        kwargs['year'] = year
+        kwargs["year"] = year
     papers = await async_search(semantic_searcher, query, max_results, **kwargs)
     return papers if papers else []
 
 
 @mcp.tool()
 async def download_semantic(paper_id: str, save_path: str = "./downloads") -> str:
-    """Download PDF of a Semantic Scholar paper.    
+    """Download PDF of a Semantic Scholar paper.
 
     Args:
-        paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
+        paper_id: Semantic Scholar paper ID, Paper identifier in one of the
+            following formats:
             - Semantic Scholar ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
             - DOI:<doi> (e.g., "DOI:10.18653/v1/N18-3011")
             - ARXIV:<id> (e.g., "ARXIV:2106.15928")
@@ -637,16 +687,17 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
         save_path: Directory to save the PDF (default: './downloads').
     Returns:
         Path to the downloaded PDF file.
-    """ 
+    """
     return semantic_searcher.download_pdf(paper_id, save_path)
 
 
 @mcp.tool()
 async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Read and extract text content from a Semantic Scholar paper. 
+    """Read and extract text content from a Semantic Scholar paper.
 
     Args:
-        paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
+        paper_id: Semantic Scholar paper ID, Paper identifier in one of the
+            following formats:
             - Semantic Scholar ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
             - DOI:<doi> (e.g., "DOI:10.18653/v1/N18-3011")
             - ARXIV:<id> (e.g., "ARXIV:2106.15928")
@@ -675,10 +726,10 @@ async def search_crossref(
     order: Optional[str] = None,
 ) -> List[Dict]:
     """Search academic papers from CrossRef database.
-    
-    CrossRef is a scholarly infrastructure organization that provides 
+
+    CrossRef is a scholarly infrastructure organization that provides
     persistent identifiers (DOIs) for scholarly content and metadata.
-    It's one of the largest citation databases covering millions of 
+    It's one of the largest citation databases covering millions of
     academic papers, journals, books, and other scholarly content.
 
     Args:
@@ -690,7 +741,11 @@ async def search_crossref(
     Returns:
         List of paper metadata in dictionary format.
     """
-    extra = {k: v for k, v in {'filter': filter, 'sort': sort, 'order': order}.items() if v is not None}
+    extra = {
+        k: v
+        for k, v in {"filter": filter, "sort": sort, "order": order}.items()
+        if v is not None
+    }
     papers = await async_search(crossref_searcher, query, max_results, **extra)
     return papers if papers else []
 
@@ -703,7 +758,7 @@ async def get_crossref_paper_by_doi(doi: str) -> Dict:
         doi: Digital Object Identifier (e.g., '10.1038/nature12373').
     Returns:
         Paper metadata in dictionary format, or empty dict if not found.
-        
+
     Example:
         get_crossref_paper_by_doi("10.1038/nature12373")
     """
@@ -720,7 +775,7 @@ async def download_crossref(paper_id: str, save_path: str = "./downloads") -> st
         save_path: Directory to save the PDF (default: './downloads').
     Returns:
         str: Message indicating that direct PDF download is not supported.
-        
+
     Note:
         CrossRef is a citation database and doesn't provide direct PDF downloads.
         Use the DOI to access the paper through the publisher's website.
@@ -766,10 +821,12 @@ async def download_with_fallback(
     """Try source-native download, OA repositories, Unpaywall, then optional Sci-Hub.
 
     Args:
-        source: Source name (arxiv, biorxiv, medrxiv, iacr, semantic, crossref, pubmed, pmc, core, europepmc, citeseerx, doaj, base, zenodo, hal, ssrn).
+        source: Source name (arxiv, biorxiv, medrxiv, iacr, semantic, crossref,
+            pubmed, pmc, core, europepmc, citeseerx, doaj, base, zenodo, hal, ssrn).
         paper_id: Source-native paper identifier.
         doi: Optional DOI used for repository/unpaywall/Sci-Hub fallback.
-        title: Optional title used for repository/Sci-Hub fallback when DOI is unavailable.
+        title: Optional title used for repository/Sci-Hub fallback when DOI is
+            unavailable.
         save_path: Directory to save downloaded files.
         use_scihub: Whether to fallback to Sci-Hub after OA attempts fail.
         scihub_base_url: Sci-Hub mirror URL for fallback.
@@ -801,21 +858,27 @@ async def download_with_fallback(
     primary_error = ""
     if source_name in primary_downloaders:
         try:
-            primary_result = await asyncio.to_thread(primary_downloaders[source_name], paper_id, save_path)
+            primary_result = await asyncio.to_thread(
+                primary_downloaders[source_name], paper_id, save_path
+            )
             if isinstance(primary_result, str) and os.path.exists(primary_result):
                 return primary_result
             if isinstance(primary_result, str) and primary_result:
                 primary_error = primary_result
         except Exception as exc:
             primary_error = str(exc)
-            logger.warning("Primary download failed for %s/%s: %s", source_name, paper_id, exc)
+            logger.warning(
+                "Primary download failed for %s/%s: %s", source_name, paper_id, exc
+            )
     else:
         primary_error = f"Unsupported source '{source_name}' for primary download."
 
     if primary_error:
         attempt_errors.append(f"primary: {primary_error}")
 
-    repository_result, repository_error = await _try_repository_fallback(doi, title, save_path)
+    repository_result, repository_error = await _try_repository_fallback(
+        doi, title, save_path
+    )
     if repository_result:
         return repository_result
     if repository_error:
@@ -823,19 +886,28 @@ async def download_with_fallback(
 
     normalized_doi = (doi or "").strip()
     if normalized_doi:
-        unpaywall_url = await asyncio.to_thread(unpaywall_resolver.resolve_best_pdf_url, normalized_doi)
+        unpaywall_url = await asyncio.to_thread(
+            unpaywall_resolver.resolve_best_pdf_url, normalized_doi
+        )
         if unpaywall_url:
-            unpaywall_result = await _download_from_url(unpaywall_url, save_path, f"unpaywall_{normalized_doi}")
+            unpaywall_result = await _download_from_url(
+                unpaywall_url, save_path, f"unpaywall_{normalized_doi}"
+            )
             if unpaywall_result:
                 return unpaywall_result
             attempt_errors.append("unpaywall: resolved OA URL but download failed")
         else:
-            attempt_errors.append("unpaywall: no OA URL found (or PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL missing)")
+            attempt_errors.append(
+                "unpaywall: no OA URL found (or "
+                "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL missing)"
+            )
     else:
         attempt_errors.append("unpaywall: DOI not provided")
 
     if not use_scihub:
-        return "Download failed after OA fallback chain. Details: " + " | ".join(attempt_errors)
+        return "Download failed after OA fallback chain. Details: " + " | ".join(
+            attempt_errors
+        )
 
     fallback_identifier = (doi or "").strip() or (title or "").strip() or paper_id
     fetcher = SciHubFetcher(base_url=scihub_base_url, output_dir=save_path)
@@ -843,7 +915,10 @@ async def download_with_fallback(
     if fallback_result:
         return fallback_result
 
-    return "Download failed after OA fallback chain and Sci-Hub fallback. Details: " + " | ".join(attempt_errors)
+    return (
+        "Download failed after OA fallback chain and Sci-Hub fallback. Details: "
+        + " | ".join(attempt_errors)
+    )
 
 
 @mcp.tool()
@@ -855,7 +930,7 @@ async def read_crossref_paper(paper_id: str, save_path: str = "./downloads") -> 
         save_path: Directory where the PDF is/will be saved (default: './downloads').
     Returns:
         str: Message indicating that direct paper reading is not supported.
-        
+
     Note:
         CrossRef is a citation database and doesn't provide direct paper content.
         Use the DOI to access the paper through the publisher's website.
@@ -1289,7 +1364,8 @@ async def download_openalex(paper_id: str, save_path: str = "./downloads") -> st
         paper_id: OpenAlex paper ID.
         save_path: Directory to save the PDF (default: './downloads').
     Returns:
-        str: Error message, typically OpenAlex relies on extracted pdf_url instead of direct downloads.
+        str: Error message, typically OpenAlex relies on extracted pdf_url instead
+            of direct downloads.
     """
     return await asyncio.to_thread(openalex_searcher.download_pdf, paper_id, save_path)
 
@@ -1298,9 +1374,12 @@ async def download_openalex(paper_id: str, save_path: str = "./downloads") -> st
 # Optional IEEE Xplore tools — registered only when API key is set
 # ---------------------------------------------------------------------------
 if ieee_searcher is not None:
+
     @mcp.tool()
     async def search_ieee(query: str, max_results: int = 10) -> List[Dict]:
-        """Search IEEE Xplore for papers.  Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY).
+        """Search IEEE Xplore for papers.
+
+        Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY).
 
         Args:
             query: Search query string.
@@ -1312,7 +1391,10 @@ if ieee_searcher is not None:
 
     @mcp.tool()
     async def download_ieee(paper_id: str, save_path: str = "./downloads") -> str:
-        """Download a PDF from IEEE Xplore.  Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY) and institutional access.
+        """Download a PDF from IEEE Xplore.
+
+        Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY) and
+        institutional access.
 
         Args:
             paper_id: IEEE Xplore paper identifier.
@@ -1320,18 +1402,23 @@ if ieee_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert ieee_searcher is not None
         return await asyncio.to_thread(ieee_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
     async def read_ieee_paper(paper_id: str, save_path: str = "./downloads") -> str:
-        """Download and read an IEEE Xplore paper.  Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY).
+        """Download and read an IEEE Xplore paper.
+
+        Requires PAPER_SEARCH_MCP_IEEE_API_KEY (or IEEE_API_KEY).
 
         Args:
             paper_id: IEEE Xplore paper identifier.
-            save_path: Directory where the PDF is/will be saved (default: './downloads').
+            save_path: Directory where the PDF is/will be saved (default:
+                './downloads').
         Returns:
             str: Extracted text content.
         """
+        assert ieee_searcher is not None
         return ieee_searcher.read_paper(paper_id, save_path)
 
 
@@ -1339,9 +1426,12 @@ if ieee_searcher is not None:
 # Optional ACM Digital Library tools — registered only when API key is set
 # ---------------------------------------------------------------------------
 if acm_searcher is not None:
+
     @mcp.tool()
     async def search_acm(query: str, max_results: int = 10) -> List[Dict]:
-        """Search ACM Digital Library for papers.  Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY).
+        """Search ACM Digital Library for papers.
+
+        Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY).
 
         Args:
             query: Search query string.
@@ -1353,7 +1443,10 @@ if acm_searcher is not None:
 
     @mcp.tool()
     async def download_acm(paper_id: str, save_path: str = "./downloads") -> str:
-        """Download a PDF from ACM Digital Library.  Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY) and institutional access.
+        """Download a PDF from ACM Digital Library.
+
+        Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY) and
+        institutional access.
 
         Args:
             paper_id: ACM DL paper identifier.
@@ -1361,18 +1454,23 @@ if acm_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert acm_searcher is not None
         return await asyncio.to_thread(acm_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
     async def read_acm_paper(paper_id: str, save_path: str = "./downloads") -> str:
-        """Download and read an ACM Digital Library paper.  Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY).
+        """Download and read an ACM Digital Library paper.
+
+        Requires PAPER_SEARCH_MCP_ACM_API_KEY (or ACM_API_KEY).
 
         Args:
             paper_id: ACM DL paper identifier.
-            save_path: Directory where the PDF is/will be saved (default: './downloads').
+            save_path: Directory where the PDF is/will be saved (default:
+                './downloads').
         Returns:
             str: Extracted text content.
         """
+        assert acm_searcher is not None
         return acm_searcher.read_paper(paper_id, save_path)
 
 

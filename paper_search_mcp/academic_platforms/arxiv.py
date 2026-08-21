@@ -1,19 +1,21 @@
 # paper_search_mcp/sources/arxiv.py
-from typing import List
-from datetime import datetime
+import os
 import re
-import requests
-import feedparser
 import threading
 import time
+from datetime import datetime
+from typing import List
+
+import feedparser
+import requests
+from pypdf import PdfReader
+
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-from pypdf import PdfReader
-import os
 
-_ARXIV_FIELD_PREFIX_RE = re.compile(r'^(ti|au|abs|co|jr|cat|rn|id|all):')
-_ARXIV_BOOLEAN_OP_RE = re.compile(r'\b(AND|OR|ANDNOT)\b')
+_ARXIV_FIELD_PREFIX_RE = re.compile(r"^(ti|au|abs|co|jr|cat|rn|id|all):")
+_ARXIV_BOOLEAN_OP_RE = re.compile(r"\b(AND|OR|ANDNOT)\b")
 
 
 def _build_search_query(query: str) -> str:
@@ -33,17 +35,21 @@ def _build_search_query(query: str) -> str:
     """
     q = query.strip()
     if not q:
-        return 'all:'
+        return "all:"
     has_field_prefix = bool(_ARXIV_FIELD_PREFIX_RE.match(q))
-    looks_structured = '"' in q or bool(_ARXIV_BOOLEAN_OP_RE.search(q)) or has_field_prefix
+    looks_structured = (
+        '"' in q or bool(_ARXIV_BOOLEAN_OP_RE.search(q)) or has_field_prefix
+    )
     if looks_structured:
-        return q if has_field_prefix else f'all:{q}'
-    if ' ' in q:
+        return q if has_field_prefix else f"all:{q}"
+    if " " in q:
         return f'all:"{q}"'
-    return f'all:{q}'
+    return f"all:{q}"
+
 
 class ArxivSearcher(PaperSource):
     """Searcher for arXiv papers"""
+
     # export.arxiv.org's HTTP endpoint hangs on the HTTP->HTTPS upgrade in
     # some network environments (observed: instant response over https://,
     # a 30s read-timeout-per-attempt hang over http:// with no server error
@@ -64,10 +70,12 @@ class ArxivSearcher(PaperSource):
 
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
-            'Accept': 'application/atom+xml, application/xml;q=0.9, */*;q=0.8',
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "paper-search-mcp/1.0 (mailto:openags@example.com)",
+                "Accept": "application/atom+xml, application/xml;q=0.9, */*;q=0.8",
+            }
+        )
         self._last_request_at = 0.0
         self._pacing_lock = threading.Lock()
 
@@ -76,17 +84,26 @@ class ArxivSearcher(PaperSource):
         instance's last request to BASE_URL.
         """
         with self._pacing_lock:
-            wait = self._MIN_REQUEST_INTERVAL - (time.monotonic() - self._last_request_at)
+            wait = self._MIN_REQUEST_INTERVAL - (
+                time.monotonic() - self._last_request_at
+            )
             if wait > 0:
                 time.sleep(wait)
             self._last_request_at = time.monotonic()
 
-    def search(self, query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> List[Paper]:
+    def search(
+        self,
+        query: str,
+        max_results: int = 10,
+        sort_by: str = "relevance",
+        sort_order: str = "descending",
+        **kwargs,
+    ) -> List[Paper]:
         params = {
-            'search_query': _build_search_query(query),
-            'max_results': max_results,
-            'sortBy': sort_by,
-            'sortOrder': sort_order,
+            "search_query": _build_search_query(query),
+            "max_results": max_results,
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
         }
         response = None
         for attempt in range(3):
@@ -111,30 +128,43 @@ class ArxivSearcher(PaperSource):
         for entry in feed.entries:
             try:
                 authors = [author.name for author in entry.authors]
-                published = datetime.strptime(entry.published, '%Y-%m-%dT%H:%M:%SZ')
-                updated = datetime.strptime(entry.updated, '%Y-%m-%dT%H:%M:%SZ')
-                pdf_url = next((link.href for link in entry.links if link.type == 'application/pdf'), '')
-                
+                published = datetime.strptime(entry.published, "%Y-%m-%dT%H:%M:%SZ")
+                updated = datetime.strptime(entry.updated, "%Y-%m-%dT%H:%M:%SZ")
+                pdf_url = next(
+                    (
+                        link.href
+                        for link in entry.links
+                        if link.type == "application/pdf"
+                    ),
+                    "",
+                )
+
                 # Try to extract DOI from entry.doi or links or summary
-                doi = entry.get('doi', '') or extract_doi(entry.summary) or extract_doi(entry.id)
+                doi = (
+                    entry.get("doi", "")
+                    or extract_doi(entry.summary)
+                    or extract_doi(entry.id)
+                )
                 for link in entry.links:
-                    if link.get('title') == 'doi':
+                    if link.get("title") == "doi":
                         doi = doi or extract_doi(link.href)
 
-                papers.append(Paper(
-                    paper_id=entry.id.split('/')[-1],
-                    title=entry.title,
-                    authors=authors,
-                    abstract=entry.summary,
-                    url=entry.id,
-                    pdf_url=pdf_url,
-                    published_date=published,
-                    updated_date=updated,
-                    source='arxiv',
-                    categories=[tag.term for tag in entry.tags],
-                    keywords=[],
-                    doi=doi
-                ))
+                papers.append(
+                    Paper(
+                        paper_id=entry.id.split("/")[-1],
+                        title=entry.title,
+                        authors=authors,
+                        abstract=entry.summary,
+                        url=entry.id,
+                        pdf_url=pdf_url,
+                        published_date=published,
+                        updated_date=updated,
+                        source="arxiv",
+                        categories=[tag.term for tag in entry.tags],
+                        keywords=[],
+                        doi=doi,
+                    )
+                )
             except Exception as e:
                 print(f"Error parsing arXiv entry: {e}")
         return papers
@@ -144,17 +174,17 @@ class ArxivSearcher(PaperSource):
         response = requests.get(pdf_url)
         os.makedirs(save_path, exist_ok=True)
         output_file = f"{save_path}/{paper_id}.pdf"
-        with open(output_file, 'wb') as f:
+        with open(output_file, "wb") as f:
             f.write(response.content)
         return output_file
 
     def read_paper(self, paper_id: str, save_path: str = "./downloads") -> str:
         """Read a paper and convert it to text format.
-        
+
         Args:
             paper_id: arXiv paper ID
             save_path: Directory where the PDF is/will be saved
-            
+
         Returns:
             str: The extracted text content of the paper
         """
@@ -162,25 +192,26 @@ class ArxivSearcher(PaperSource):
         pdf_path = f"{save_path}/{paper_id}.pdf"
         if not os.path.exists(pdf_path):
             pdf_path = self.download_pdf(paper_id, save_path)
-        
+
         # Read the PDF
         try:
             reader = PdfReader(pdf_path)
             text = ""
-            
+
             # Extract text from each page
             for page in reader.pages:
                 text += page.extract_text() + "\n"
-            
+
             return text.strip()
         except Exception as e:
             print(f"Error reading PDF for paper {paper_id}: {e}")
             return ""
 
+
 if __name__ == "__main__":
     # 测试 ArxivSearcher 的功能
     searcher = ArxivSearcher()
-    
+
     # 测试搜索功能
     print("Testing search functionality...")
     query = "machine learning"
@@ -192,7 +223,7 @@ if __name__ == "__main__":
             print(f"{i}. {paper.title} (ID: {paper.paper_id})")
     except Exception as e:
         print(f"Error during search: {e}")
-    
+
     # 测试 PDF 下载功能
     if papers:
         print("\nTesting PDF download functionality...")
@@ -211,7 +242,7 @@ if __name__ == "__main__":
         paper_id = papers[0].paper_id
         try:
             text_content = searcher.read_paper(paper_id)
-            print(f"\nFirst 500 characters of the paper content:")
+            print("\nFirst 500 characters of the paper content:")
             print(text_content[:500] + "...")
             print(f"\nTotal length of extracted text: {len(text_content)} characters")
         except Exception as e:

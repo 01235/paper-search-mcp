@@ -1,10 +1,11 @@
 # paper_search_mcp/academic_platforms/dblp.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
-import xml.etree.ElementTree as ET
 import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from typing import List, Optional
+
+import requests
 from bs4 import BeautifulSoup
 
 from ..paper import Paper
@@ -25,10 +26,12 @@ class DBLPSearcher(PaperSource):
 
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
-            'Accept': 'application/xml, application/json'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)",
+                "Accept": "application/xml, application/json",
+            }
+        )
 
     def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
         """
@@ -50,27 +53,27 @@ class DBLPSearcher(PaperSource):
         try:
             # Prepare parameters for dblp API
             params = {
-                'q': query,
-                'format': self.DEFAULT_FORMAT,
-                'h': min(max_results, 1000)  # dblp supports up to 1000 results
+                "q": query,
+                "format": self.DEFAULT_FORMAT,
+                "h": min(max_results, 1000),  # dblp supports up to 1000 results
             }
 
             # Add optional filters
-            if 'year' in kwargs:
-                year = kwargs['year']
-                if isinstance(year, str) and '-' in year:
+            if "year" in kwargs:
+                year = kwargs["year"]
+                if isinstance(year, str) and "-" in year:
                     # Handle year range like "2020-2023"
-                    year_range = year.split('-')
+                    year_range = year.split("-")
                     if len(year_range) == 2:
-                        params['q'] = f"{query} year:{year_range[0]}:{year_range[1]}"
+                        params["q"] = f"{query} year:{year_range[0]}:{year_range[1]}"
                 else:
-                    params['q'] = f"{query} year:{year}"
+                    params["q"] = f"{query} year:{year}"
 
-            if 'venue' in kwargs:
-                params['q'] = f"{query} venue:{kwargs['venue']}"
+            if "venue" in kwargs:
+                params["q"] = f"{query} venue:{kwargs['venue']}"
 
-            if 'author' in kwargs:
-                params['q'] = f"{query} author:{kwargs['author']}"
+            if "author" in kwargs:
+                params["q"] = f"{query} author:{kwargs['author']}"
 
             logger.debug(f"Searching dblp with query: {params['q']}")
 
@@ -91,7 +94,7 @@ class DBLPSearcher(PaperSource):
             root = ET.fromstring(response.content)
 
             # dblp XML structure: result > hits > hit > info
-            hits = root.findall('.//hit')
+            hits = root.findall(".//hit")
 
             for hit in hits:
                 try:
@@ -109,12 +112,14 @@ class DBLPSearcher(PaperSource):
             if papers:
                 return papers
 
-            logger.warning("dblp API returned no parseable results, attempting HTML fallback")
+            logger.warning(
+                "dblp API returned no parseable results, attempting HTML fallback"
+            )
             return self._search_html_fallback(query=query, max_results=max_results)
 
         except requests.RequestException as e:
             logger.error(f"dblp API request error: {e}")
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 logger.error(f"Response status: {e.response.status_code}")
             return self._search_html_fallback(query=query, max_results=max_results)
         except ET.ParseError as e:
@@ -132,37 +137,37 @@ class DBLPSearcher(PaperSource):
         try:
             response = self.session.get(
                 self.HTML_SEARCH_URL,
-                params={'q': query},
+                params={"q": query},
                 timeout=30,
             )
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            entries = soup.select('.publ-list .entry')
+            soup = BeautifulSoup(response.text, "html.parser")
+            entries = soup.select(".publ-list .entry")
             for entry in entries:
                 try:
-                    title_elem = entry.select_one('.title')
+                    title_elem = entry.select_one(".title")
                     if not title_elem:
                         continue
-                    title = title_elem.get_text(' ', strip=True)
+                    title = title_elem.get_text(" ", strip=True)
                     if not title:
                         continue
 
-                    doi = ''
-                    paper_url = ''
-                    details_link = entry.select_one('li.details a[href]')
-                    ee_link = entry.select_one('li.ee a[href]')
-                    if details_link and details_link.get('href'):
-                        paper_url = details_link['href']
-                    if ee_link and ee_link.get('href'):
-                        ee_href = ee_link['href']
+                    doi = ""
+                    paper_url = ""
+                    details_link = entry.select_one("li.details a[href]")
+                    ee_link = entry.select_one("li.ee a[href]")
+                    if details_link and details_link.get("href"):
+                        paper_url = str(details_link["href"])
+                    if ee_link and ee_link.get("href"):
+                        ee_href = str(ee_link["href"])
                         extracted = extract_doi(ee_href)
                         if extracted:
                             doi = extracted
                         if not paper_url:
                             paper_url = ee_href
 
-                    year_str = ''
-                    year_elem = entry.select_one('.year')
+                    year_str = ""
+                    year_elem = entry.select_one(".year")
                     if year_elem:
                         year_str = year_elem.get_text(strip=True)
                     published_date = None
@@ -170,33 +175,42 @@ class DBLPSearcher(PaperSource):
                         published_date = datetime(int(year_str), 1, 1)
 
                     authors: List[str] = []
-                    for node in entry.select('[itemprop="author"] [itemprop="name"], [itemprop="author"]'):
-                        text = node.get_text(' ', strip=True)
+                    for node in entry.select(
+                        '[itemprop="author"] [itemprop="name"], [itemprop="author"]'
+                    ):
+                        text = node.get_text(" ", strip=True)
                         if text and text not in authors and len(text) < 120:
                             authors.append(text)
 
-                    entry_id = entry.get('id') or f"dblp_{hash(title) & 0xffffffff:08x}"
+                    raw_id = entry.get("id")
+                    entry_id = (
+                        str(raw_id)
+                        if raw_id
+                        else f"dblp_{hash(title) & 0xFFFFFFFF:08x}"
+                    )
 
-                    papers.append(Paper(
-                        paper_id=entry_id,
-                        title=title,
-                        authors=authors,
-                        abstract='',
-                        doi=doi,
-                        published_date=published_date,
-                        pdf_url='',
-                        url=paper_url or f"https://dblp.org/search/publ?q={query}",
-                        source='dblp',
-                        extra={
-                            'venue': '',
-                            'year': year_str,
-                            'pages': '',
-                            'volume': '',
-                            'type': '',
-                            'key': entry_id,
-                            'fallback': 'html',
-                        }
-                    ))
+                    papers.append(
+                        Paper(
+                            paper_id=entry_id,
+                            title=title,
+                            authors=authors,
+                            abstract="",
+                            doi=doi,
+                            published_date=published_date,
+                            pdf_url="",
+                            url=paper_url or f"https://dblp.org/search/publ?q={query}",
+                            source="dblp",
+                            extra={
+                                "venue": "",
+                                "year": year_str,
+                                "pages": "",
+                                "volume": "",
+                                "type": "",
+                                "key": entry_id,
+                                "fallback": "html",
+                            },
+                        )
+                    )
                     if len(papers) >= max_results:
                         break
                 except Exception as exc:
@@ -211,12 +225,12 @@ class DBLPSearcher(PaperSource):
         """Parse a dblp hit element into a Paper object."""
         try:
             # Extract basic information from info element
-            info = hit.find('info')
+            info = hit.find("info")
             if info is None:
                 return None
 
             # Extract title
-            title_elem = info.find('title')
+            title_elem = info.find("title")
             if title_elem is None:
                 return None
 
@@ -226,48 +240,66 @@ class DBLPSearcher(PaperSource):
 
             # Extract authors
             authors = []
-            author_elems = info.findall('authors/author')
+            author_elems = info.findall("authors/author")
             for author_elem in author_elems:
                 author_name = author_elem.text.strip() if author_elem.text else ""
                 if author_name:
                     authors.append(author_name)
 
             # Extract venue (conference/journal)
-            venue_elem = info.find('venue')
-            venue = venue_elem.text.strip() if venue_elem is not None and venue_elem.text else ""
+            venue_elem = info.find("venue")
+            venue = (
+                venue_elem.text.strip()
+                if venue_elem is not None and venue_elem.text
+                else ""
+            )
 
             # Extract year
-            year_elem = info.find('year')
-            year_str = year_elem.text.strip() if year_elem is not None and year_elem.text else ""
+            year_elem = info.find("year")
+            year_str = (
+                year_elem.text.strip()
+                if year_elem is not None and year_elem.text
+                else ""
+            )
 
             # Extract pages
-            pages_elem = info.find('pages')
-            pages = pages_elem.text.strip() if pages_elem is not None and pages_elem.text else ""
+            pages_elem = info.find("pages")
+            pages = (
+                pages_elem.text.strip()
+                if pages_elem is not None and pages_elem.text
+                else ""
+            )
 
             # Extract volume
-            volume_elem = info.find('volume')
-            volume = volume_elem.text.strip() if volume_elem is not None and volume_elem.text else ""
+            volume_elem = info.find("volume")
+            volume = (
+                volume_elem.text.strip()
+                if volume_elem is not None and volume_elem.text
+                else ""
+            )
 
             # Extract URL (dblp key)
-            url_elem = info.find('url')
-            dblp_url = url_elem.text.strip() if url_elem is not None and url_elem.text else ""
+            url_elem = info.find("url")
+            dblp_url = (
+                url_elem.text.strip() if url_elem is not None and url_elem.text else ""
+            )
 
             # Extract DOI from ee elements (electronic edition)
             doi = ""
-            ee_elems = info.findall('ee')
+            ee_elems = info.findall("ee")
             for ee_elem in ee_elems:
                 ee_text = ee_elem.text.strip() if ee_elem.text else ""
-                if 'doi.org' in ee_text:
-                    doi = ee_text.split('doi.org/')[-1]
+                if "doi.org" in ee_text:
+                    doi = ee_text.split("doi.org/")[-1]
                     break
-                elif ee_text.startswith('10.'):
+                elif ee_text.startswith("10."):
                     doi = ee_text
                     break
 
             # If no DOI found in ee, try to extract from other fields
             if not doi:
                 # Check if there's a DOI field directly
-                doi_elem = info.find('doi')
+                doi_elem = info.find("doi")
                 if doi_elem is not None and doi_elem.text:
                     doi = doi_elem.text.strip()
 
@@ -283,11 +315,11 @@ class DBLPSearcher(PaperSource):
             paper_id = ""
             if dblp_url:
                 # Extract dblp key from URL: e.g., "rec/conf/sigmod/2023" from URL
-                paper_id = dblp_url.split('/')[-1] if '/' in dblp_url else dblp_url
+                paper_id = dblp_url.split("/")[-1] if "/" in dblp_url else dblp_url
 
             if not paper_id:
                 # Generate ID from title and authors
-                paper_id = f"dblp_{hash(title) & 0xffffffff:08x}"
+                paper_id = f"dblp_{hash(title) & 0xFFFFFFFF:08x}"
 
             # Construct PDF URL - dblp doesn't provide direct PDF links
             # but we can try to find PDF through other sources
@@ -306,15 +338,15 @@ class DBLPSearcher(PaperSource):
                 published_date=published_date,
                 pdf_url=pdf_url,
                 url=dblp_url if dblp_url else f"https://dblp.org/{paper_id}",
-                source='dblp',
+                source="dblp",
                 extra={
-                    'venue': venue,
-                    'year': year_str,
-                    'pages': pages,
-                    'volume': volume,
-                    'type': info.get('type', 'article'),
-                    'key': info.get('key', ''),
-                }
+                    "venue": venue,
+                    "year": year_str,
+                    "pages": pages,
+                    "volume": volume,
+                    "type": info.get("type", "article"),
+                    "key": info.get("key", ""),
+                },
             )
 
         except Exception as e:
@@ -379,8 +411,9 @@ if __name__ == "__main__":
 
     print(f"Found {len(papers)} papers:")
     for i, paper in enumerate(papers):
-        print(f"\n{i+1}. {paper.title}")
-        print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
+        print(f"\n{i + 1}. {paper.title}")
+        author_suffix = "..." if len(paper.authors) > 3 else ""
+        print(f"   Authors: {', '.join(paper.authors[:3])}{author_suffix}")
         print(f"   DOI: {paper.doi}")
         print(f"   Year: {paper.extra.get('year', 'N/A')}")
         print(f"   Venue: {paper.extra.get('venue', 'N/A')}")

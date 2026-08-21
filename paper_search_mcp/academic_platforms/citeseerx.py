@@ -1,17 +1,17 @@
 # paper_search_mcp/academic_platforms/citeseerx.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
-import logging
 import json
-import xml.etree.ElementTree as ET
-from urllib.parse import quote, urlencode
-from requests.exceptions import SSLError
-import urllib3
+import logging
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
+import requests
+import urllib3
+from requests.exceptions import SSLError
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -35,21 +35,25 @@ class CiteSeerXSearcher(PaperSource):
         """
         self.api_key = api_key or get_env("CITESEERX_API_KEY", "")
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
-            'Accept': 'application/json'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)",
+                "Accept": "application/json",
+            }
+        )
         if self.api_key:
-            self.session.headers.update({'Authorization': f'Bearer {self.api_key}'})
+            self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
 
     def _get(self, url: str, **kwargs) -> requests.Response:
         """GET wrapper with SSL fallback and archive-redirect detection."""
-        kwargs.setdefault('timeout', 30)
+        kwargs.setdefault("timeout", 30)
         try:
             resp = self.session.get(url, **kwargs)
         except SSLError:
-            logger.warning("CiteSeerX SSL verification failed; retrying without cert verification")
-            kwargs['verify'] = False
+            logger.warning(
+                "CiteSeerX SSL verification failed; retrying without cert verification"
+            )
+            kwargs["verify"] = False
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             resp = self.session.get(url, **kwargs)
 
@@ -85,31 +89,31 @@ class CiteSeerXSearcher(PaperSource):
         try:
             # Prepare parameters for CiteSeerX API
             params = {
-                'q': query,
-                'max': min(max_results, 100),  # CiteSeerX default max
-                'start': 0,
-                'sort': kwargs.get('sort', 'relevance')
+                "q": query,
+                "max": min(max_results, 100),  # CiteSeerX default max
+                "start": 0,
+                "sort": kwargs.get("sort", "relevance"),
             }
 
             # Add filters
-            if 'year' in kwargs:
-                year = kwargs['year']
-                if isinstance(year, str) and '-' in year:
+            if "year" in kwargs:
+                year = kwargs["year"]
+                if isinstance(year, str) and "-" in year:
                     # Handle year range
-                    year_range = year.split('-')
+                    year_range = year.split("-")
                     if len(year_range) == 2:
-                        params['year'] = f"{year_range[0]}-{year_range[1]}"
+                        params["year"] = f"{year_range[0]}-{year_range[1]}"
                 else:
-                    params['year'] = str(year)
+                    params["year"] = str(year)
 
-            if 'author' in kwargs:
-                params['author'] = kwargs['author']
+            if "author" in kwargs:
+                params["author"] = kwargs["author"]
 
-            if 'venue' in kwargs:
-                params['venue'] = kwargs['venue']
+            if "venue" in kwargs:
+                params["venue"] = kwargs["venue"]
 
-            if 'min_citations' in kwargs:
-                params['minCitations'] = kwargs['min_citations']
+            if "min_citations" in kwargs:
+                params["minCitations"] = kwargs["min_citations"]
 
             logger.debug(f"Searching CiteSeerX with params: {params}")
 
@@ -119,7 +123,7 @@ class CiteSeerXSearcher(PaperSource):
             data = response.json()
 
             # CiteSeerX API returns results in 'result' field
-            results = data.get('result', {}).get('hits', {}).get('hit', [])
+            results = data.get("result", {}).get("hits", {}).get("hit", [])
 
             # Handle single result (API returns dict instead of list for single result)
             if isinstance(results, dict):
@@ -140,7 +144,7 @@ class CiteSeerXSearcher(PaperSource):
 
         except requests.RequestException as e:
             logger.error(f"CiteSeerX API request error: {e}")
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 logger.error(f"Response status: {e.response.status_code}")
                 if e.response.status_code == 429:
                     logger.warning("CiteSeerX rate limit exceeded")
@@ -155,41 +159,41 @@ class CiteSeerXSearcher(PaperSource):
         """Parse a CiteSeerX API result into a Paper object."""
         try:
             # Extract paper info from result
-            info = result.get('info', {})
+            info = result.get("info", {})
             if not info:
                 return None
 
             # Extract title
-            title = info.get('title', '').strip()
+            title = info.get("title", "").strip()
             if not title:
                 return None
 
             # Extract authors
             authors = []
-            author_list = info.get('authors', [])
+            author_list = info.get("authors", [])
             if isinstance(author_list, list):
                 for author in author_list:
                     if isinstance(author, dict):
-                        author_name = author.get('name', '')
+                        author_name = author.get("name", "")
                         if author_name:
                             authors.append(author_name)
                     elif isinstance(author, str):
                         authors.append(author)
             elif isinstance(author_list, dict):
-                author_name = author_list.get('name', '')
+                author_name = author_list.get("name", "")
                 if author_name:
                     authors.append(author_name)
 
             # Extract abstract
-            abstract = info.get('abstract', '').strip()
+            abstract = info.get("abstract", "").strip()
 
             # Extract DOI
-            doi = info.get('doi', '')
+            doi = info.get("doi", "")
             if not doi and abstract:
                 doi = extract_doi(abstract)
 
             # Extract publication year
-            year = info.get('year', '')
+            year = info.get("year", "")
             published_date = None
             if year and year.isdigit():
                 try:
@@ -198,43 +202,43 @@ class CiteSeerXSearcher(PaperSource):
                     pass
 
             # Extract venue
-            venue = info.get('venue', '')
+            venue = info.get("venue", "")
 
             # Extract citation count
-            citations = int(info.get('citations', 0))
+            citations = int(info.get("citations", 0))
 
             # Extract paper ID
-            paper_id = info.get('id', '')
+            paper_id = info.get("id", "")
             if not paper_id:
                 # Generate ID from DOI or title
                 if doi:
                     paper_id = f"citeseerx_{doi.replace('/', '_')}"
                 else:
-                    paper_id = f"citeseerx_{hash(title) & 0xffffffff:08x}"
+                    paper_id = f"citeseerx_{hash(title) & 0xFFFFFFFF:08x}"
 
             # Construct URLs
-            url = info.get('url', '')
+            url = info.get("url", "")
             if not url and paper_id:
                 url = f"{self.BASE_URL}/paper?id={paper_id}"
 
-            pdf_url = info.get('pdf', '')
+            pdf_url = info.get("pdf", "")
             if not pdf_url and doi:
                 # Try to construct PDF URL from DOI
                 pdf_url = f"https://doi.org/{doi}"
 
             # Extract keywords
             keywords = []
-            keyword_list = info.get('keywords', [])
+            keyword_list = info.get("keywords", [])
             if isinstance(keyword_list, list):
                 keywords = [kw for kw in keyword_list if isinstance(kw, str)]
             elif isinstance(keyword_list, str):
                 keywords = [keyword_list]
 
             # Extract additional metadata
-            publisher = info.get('publisher', '')
-            volume = info.get('volume', '')
-            issue = info.get('issue', '')
-            pages = info.get('pages', '')
+            publisher = info.get("publisher", "")
+            volume = info.get("volume", "")
+            issue = info.get("issue", "")
+            pages = info.get("pages", "")
 
             # Create Paper object
             return Paper(
@@ -246,20 +250,20 @@ class CiteSeerXSearcher(PaperSource):
                 published_date=published_date,
                 pdf_url=pdf_url,
                 url=url,
-                source='citeseerx',
+                source="citeseerx",
                 citations=citations,
                 keywords=keywords[:10],
                 extra={
-                    'venue': venue,
-                    'year': year,
-                    'publisher': publisher,
-                    'volume': volume,
-                    'issue': issue,
-                    'pages': pages,
-                    'citation_count': citations,
-                    'source_db': info.get('source', ''),
-                    'type': info.get('type', ''),
-                }
+                    "venue": venue,
+                    "year": year,
+                    "publisher": publisher,
+                    "volume": volume,
+                    "issue": issue,
+                    "pages": pages,
+                    "citation_count": citations,
+                    "source_db": info.get("source", ""),
+                    "type": info.get("type", ""),
+                },
             )
 
         except Exception as e:
@@ -282,7 +286,7 @@ class CiteSeerXSearcher(PaperSource):
             response.raise_for_status()
 
             data = response.json()
-            paper = self._parse_citeseerx_result({'info': data})
+            paper = self._parse_citeseerx_result({"info": data})
 
             return paper
 
@@ -327,7 +331,7 @@ class CiteSeerXSearcher(PaperSource):
             filepath = os.path.join(save_path, filename)
 
             # Save PDF
-            with open(filepath, 'wb') as f:
+            with open(filepath, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
@@ -371,11 +375,16 @@ class CiteSeerXSearcher(PaperSource):
             # Try to download PDF and extract text
             try:
                 pdf_path = self.download_pdf(paper_id, save_path)
-                # Extract text from PDF (simplified - would need PDF text extraction library)
+                # Extract text from PDF (simplified - would need PDF text extraction
+                # library)
                 return f"PDF downloaded to {pdf_path}. Text extraction not implemented."
             except Exception as e:
                 logger.warning(f"Could not download PDF: {e}")
-                return f"Abstract: {paper.abstract}" if paper.abstract else "No content available"
+                return (
+                    f"Abstract: {paper.abstract}"
+                    if paper.abstract
+                    else "No content available"
+                )
 
         except Exception as e:
             logger.error(f"Error reading paper: {e}")
@@ -398,8 +407,9 @@ if __name__ == "__main__":
 
     print(f"Found {len(papers)} papers:")
     for i, paper in enumerate(papers):
-        print(f"\n{i+1}. {paper.title}")
-        print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
+        print(f"\n{i + 1}. {paper.title}")
+        author_suffix = "..." if len(paper.authors) > 3 else ""
+        print(f"   Authors: {', '.join(paper.authors[:3])}{author_suffix}")
         print(f"   DOI: {paper.doi}")
         print(f"   Year: {paper.extra.get('year', 'N/A')}")
         print(f"   Venue: {paper.extra.get('venue', 'N/A')}")

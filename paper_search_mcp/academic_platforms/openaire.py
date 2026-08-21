@@ -1,16 +1,17 @@
 # paper_search_mcp/academic_platforms/openaire.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
-import xml.etree.ElementTree as ET
-import urllib3
 import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import requests
+import urllib3
 from requests.exceptions import SSLError
 
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -35,42 +36,44 @@ class OpenAiresearcher(PaperSource):
         """
         self.api_key = api_key or get_env("OPENAIRE_API_KEY", "")
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
-            'Accept': 'application/json, application/xml'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)",
+                "Accept": "application/json, application/xml",
+            }
+        )
         if self.api_key:
-            self.session.headers.update({'Authorization': f'Bearer {self.api_key}'})
+            self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
 
     def _search_with_retry(self, query: str, max_results: int, **kwargs) -> List[Paper]:
         request_profiles = [
             {
-                'params': {
-                    'keywords': query,
-                    'page': 1,
-                    'size': min(max_results, 100),
+                "params": {
+                    "keywords": query,
+                    "page": 1,
+                    "size": min(max_results, 100),
                 },
             },
             {
-                'params': {
-                    'keywords': query,
-                    'page': 0,
-                    'size': min(max_results, 100),
+                "params": {
+                    "keywords": query,
+                    "page": 0,
+                    "size": min(max_results, 100),
                 },
-                'headers': {
-                    'Accept': 'application/xml',
+                "headers": {
+                    "Accept": "application/xml",
                 },
             },
             {
-                'params': {
-                    'keywords': query,
-                    'page': 1,
-                    'size': min(max_results, 100),
+                "params": {
+                    "keywords": query,
+                    "page": 1,
+                    "size": min(max_results, 100),
                 },
-                'use_raw_request': True,
-                'headers': {
-                    'User-Agent': 'Mozilla/5.0',
-                    'Accept': 'application/xml,text/xml;q=0.9,*/*;q=0.8',
+                "use_raw_request": True,
+                "headers": {
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "application/xml,text/xml;q=0.9,*/*;q=0.8",
                 },
             },
         ]
@@ -79,24 +82,25 @@ class OpenAiresearcher(PaperSource):
         for profile in request_profiles:
             for attempt in range(3):
                 try:
-                    if profile.get('use_raw_request'):
+                    if profile.get("use_raw_request"):
                         response = requests.get(
                             self.RESEARCH_PRODUCTS_URL,
-                            params=profile['params'],
-                            headers=profile.get('headers'),
+                            params=profile["params"],
+                            headers=profile.get("headers"),
                             timeout=30,
                         )
                     else:
                         response = self._get(
                             self.RESEARCH_PRODUCTS_URL,
-                            params=profile['params'],
-                            headers=profile.get('headers'),
+                            params=profile["params"],
+                            headers=profile.get("headers"),
                         )
 
                     if response.status_code in self.RETRYABLE_STATUS_CODES:
-                        wait_seconds = min(8, 2 ** attempt)
+                        wait_seconds = min(8, 2**attempt)
                         logger.warning(
-                            "OpenAIRE request returned %s (attempt %s/3). Retrying in %ss",
+                            "OpenAIRE request returned %s (attempt %s/3). "
+                            "Retrying in %ss",
                             response.status_code,
                             attempt + 1,
                             wait_seconds,
@@ -126,9 +130,11 @@ class OpenAiresearcher(PaperSource):
 
     @staticmethod
     def _local_name(tag: Any) -> str:
-        return tag.split('}')[-1] if isinstance(tag, str) else ''
+        return tag.split("}")[-1] if isinstance(tag, str) else ""
 
-    def _first_child(self, parent: Optional[ET.Element], local_name: str) -> Optional[ET.Element]:
+    def _first_child(
+        self, parent: Optional[ET.Element], local_name: str
+    ) -> Optional[ET.Element]:
         if parent is None:
             return None
         for child in list(parent):
@@ -149,23 +155,26 @@ class OpenAiresearcher(PaperSource):
         return values
 
     def _get(self, url: str, **kwargs) -> requests.Response:
-        kwargs.setdefault('timeout', 30)
+        kwargs.setdefault("timeout", 30)
         try:
             return self.session.get(url, **kwargs)
         except SSLError:
-            logger.warning("OpenAIRE SSL verification failed; retrying without cert verification")
-            kwargs['verify'] = False
+            logger.warning(
+                "OpenAIRE SSL verification failed; retrying without cert verification"
+            )
+            kwargs["verify"] = False
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             return self.session.get(url, **kwargs)
 
     def _find_top_level_results(self, root: ET.Element) -> List[ET.Element]:
         for element in root.iter():
-            if self._local_name(element.tag).lower() != 'results':
+            if self._local_name(element.tag).lower() != "results":
                 continue
 
             return [
-                child for child in list(element)
-                if self._local_name(child.tag).lower() == 'result'
+                child
+                for child in list(element)
+                if self._local_name(child.tag).lower() == "result"
             ]
 
         return []
@@ -176,8 +185,8 @@ class OpenAiresearcher(PaperSource):
 
         value = value.strip()
         for parser in (
-            lambda x: datetime.fromisoformat(x.replace('Z', '+00:00')),
-            lambda x: datetime.strptime(x[:10], '%Y-%m-%d'),
+            lambda x: datetime.fromisoformat(x.replace("Z", "+00:00")),
+            lambda x: datetime.strptime(x[:10], "%Y-%m-%d"),
             lambda x: datetime(int(x[:4]), 1, 1),
         ):
             try:
@@ -189,34 +198,36 @@ class OpenAiresearcher(PaperSource):
     def _matches_filters(self, paper: Paper, filters: Dict[str, Any]) -> bool:
         extra = paper.extra or {}
 
-        year_filter = filters.get('year')
+        year_filter = filters.get("year")
         if year_filter:
             if not paper.published_date:
                 return False
-            if isinstance(year_filter, str) and '-' in year_filter:
-                bounds = year_filter.split('-', 1)
+            if isinstance(year_filter, str) and "-" in year_filter:
+                bounds = year_filter.split("-", 1)
                 if len(bounds) == 2 and bounds[0].isdigit() and bounds[1].isdigit():
                     year = paper.published_date.year
                     if year < int(bounds[0]) or year > int(bounds[1]):
                         return False
-            elif str(year_filter).isdigit() and paper.published_date.year != int(year_filter):
+            elif str(year_filter).isdigit() and paper.published_date.year != int(
+                year_filter
+            ):
                 return False
 
-        if filters.get('open_access') and not extra.get('open_access'):
+        if filters.get("open_access") and not extra.get("open_access"):
             return False
 
-        language = str(filters.get('language', '')).strip().lower()
+        language = str(filters.get("language", "")).strip().lower()
         if language:
-            paper_language = str(extra.get('language', '')).strip().lower()
+            paper_language = str(extra.get("language", "")).strip().lower()
             if not paper_language or paper_language != language:
                 return False
 
-        from_date = self._parse_date(str(filters.get('from_date', '')))
+        from_date = self._parse_date(str(filters.get("from_date", "")))
         if from_date:
             if not paper.published_date or paper.published_date < from_date:
                 return False
 
-        to_date = self._parse_date(str(filters.get('to_date', '')))
+        to_date = self._parse_date(str(filters.get("to_date", "")))
         if to_date:
             if not paper.published_date or paper.published_date > to_date:
                 return False
@@ -225,14 +236,14 @@ class OpenAiresearcher(PaperSource):
 
     def _extract_rel_data(self, rel_node: Optional[ET.Element]) -> Dict[str, Any]:
         data: Dict[str, Any] = {
-            'authors': [],
-            'pids': [],
-            'urls': [],
-            'descriptions': [],
-            'titles': [],
-            'publishers': [],
-            'dates': [],
-            'score': 0,
+            "authors": [],
+            "pids": [],
+            "urls": [],
+            "descriptions": [],
+            "titles": [],
+            "publishers": [],
+            "dates": [],
+            "score": 0,
         }
 
         if rel_node is None:
@@ -240,31 +251,40 @@ class OpenAiresearcher(PaperSource):
 
         def walk(node: ET.Element, under_children: bool = False):
             tag = self._local_name(node.tag).lower()
-            next_under_children = under_children or tag == 'children'
+            next_under_children = under_children or tag == "children"
 
             if not next_under_children:
-                text = node.text.strip() if node.text else ''
+                text = node.text.strip() if node.text else ""
                 if text:
-                    if tag == 'creator' and text not in data['authors']:
-                        data['authors'].append(text)
-                    elif tag in {'pid', 'identifier'} and text not in data['pids']:
-                        data['pids'].append(text)
-                    elif tag in {'url', 'webresource'} and text.startswith('http') and text not in data['urls']:
-                        data['urls'].append(text)
-                    elif tag == 'description' and text not in data['descriptions']:
-                        data['descriptions'].append(text)
-                    elif tag == 'title' and text not in data['titles']:
-                        data['titles'].append(text)
-                    elif tag == 'publisher' and text not in data['publishers']:
-                        data['publishers'].append(text)
-                    elif tag in {'dateofacceptance', 'publicationdate'} and text not in data['dates']:
-                        data['dates'].append(text)
+                    if tag == "creator" and text not in data["authors"]:
+                        data["authors"].append(text)
+                    elif tag in {"pid", "identifier"} and text not in data["pids"]:
+                        data["pids"].append(text)
+                    elif (
+                        tag in {"url", "webresource"}
+                        and text.startswith("http")
+                        and text not in data["urls"]
+                    ):
+                        data["urls"].append(text)
+                    elif tag == "description" and text not in data["descriptions"]:
+                        data["descriptions"].append(text)
+                    elif tag == "title" and text not in data["titles"]:
+                        data["titles"].append(text)
+                    elif tag == "publisher" and text not in data["publishers"]:
+                        data["publishers"].append(text)
+                    elif (
+                        tag in {"dateofacceptance", "publicationdate"}
+                        and text not in data["dates"]
+                    ):
+                        data["dates"].append(text)
 
             for child in list(node):
                 walk(child, next_under_children)
 
         walk(rel_node)
-        data['score'] = len(data['pids']) * 3 + len(data['urls']) * 2 + len(data['authors'])
+        data["score"] = (
+            len(data["pids"]) * 3 + len(data["urls"]) * 2 + len(data["authors"])
+        )
         return data
 
     def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
@@ -294,19 +314,22 @@ class OpenAiresearcher(PaperSource):
             if papers:
                 return papers
         except Exception as exc:
-            logger.warning("OpenAIRE v2 XML search failed, attempting legacy parser fallback: %s", exc)
+            logger.warning(
+                "OpenAIRE v2 XML search failed, attempting legacy parser fallback: %s",
+                exc,
+            )
 
         # Legacy fallback path (may not be available in some environments)
         try:
             params = {
-                'size': min(max_results, 100),
-                'format': self.DEFAULT_FORMAT,
-                'query': query,
+                "size": min(max_results, 100),
+                "format": self.DEFAULT_FORMAT,
+                "query": query,
             }
             response = self._get(f"{self.BASE_URL}/search/publications", params=params)
             response.raise_for_status()
             data = response.json()
-            results = data.get('response', {}).get('results', {}).get('result', [])
+            results = data.get("response", {}).get("results", {}).get("result", [])
             if isinstance(results, dict):
                 results = [results]
             for result in results:
@@ -323,132 +346,155 @@ class OpenAiresearcher(PaperSource):
     def _parse_openaire_xml_result(self, node: ET.Element) -> Optional[Paper]:
         """Parse OpenAIRE researchProducts XML result element."""
         try:
-            header = self._first_child(node, 'header')
-            metadata = self._first_child(node, 'metadata')
-            entity = self._first_child(metadata, 'entity')
-            inner_result = self._first_child(entity, 'result')
+            header = self._first_child(node, "header")
+            metadata = self._first_child(node, "metadata")
+            entity = self._first_child(metadata, "entity")
+            inner_result = self._first_child(entity, "result")
             target = inner_result if inner_result is not None else node
 
-            title_candidates = self._direct_texts(target, 'title')
+            title_candidates = self._direct_texts(target, "title")
 
             main_titles: List[str] = []
             for child in list(target):
-                if self._local_name(child.tag).lower() != 'title' or not child.text:
+                if self._local_name(child.tag).lower() != "title" or not child.text:
                     continue
                 value = child.text.strip()
                 if not value:
                     continue
-                classid = (child.get('classid') or '').lower()
-                classname = (child.get('classname') or '').lower()
-                if 'main' in classid or 'main' in classname:
+                classid = (child.get("classid") or "").lower()
+                classname = (child.get("classname") or "").lower()
+                if "main" in classid or "main" in classname:
                     main_titles.append(value)
 
-            title = (main_titles[0] if main_titles else (title_candidates[0] if title_candidates else ''))
+            title = (
+                main_titles[0]
+                if main_titles
+                else (title_candidates[0] if title_candidates else "")
+            )
             if not title:
                 return None
 
-            rels_node = self._first_child(target, 'rels')
+            rels_node = self._first_child(target, "rels")
             relation_parent = rels_node if rels_node is not None else []
             relation_nodes = [
-                child for child in list(relation_parent)
-                if self._local_name(child.tag).lower() == 'rel'
+                child
+                for child in list(relation_parent)
+                if self._local_name(child.tag).lower() == "rel"
             ]
             relation_data = [self._extract_rel_data(rel) for rel in relation_nodes]
-            relation_data.sort(key=lambda x: x['score'], reverse=True)
-            primary_rel = relation_data[0] if relation_data else self._extract_rel_data(None)
+            relation_data.sort(key=lambda x: x["score"], reverse=True)
+            primary_rel = (
+                relation_data[0] if relation_data else self._extract_rel_data(None)
+            )
 
-            authors = primary_rel['authors'][:20]
+            authors = primary_rel["authors"][:20]
 
-            description_candidates = self._direct_texts(target, 'description')
+            description_candidates = self._direct_texts(target, "description")
             if not description_candidates:
-                description_candidates = primary_rel['descriptions']
-            abstract = description_candidates[0] if description_candidates else ''
+                description_candidates = primary_rel["descriptions"]
+            abstract = description_candidates[0] if description_candidates else ""
 
-            pid_candidates = self._direct_texts(target, 'pid') + primary_rel['pids']
-            doi = ''
-            for value in pid_candidates + [abstract, title] + primary_rel['titles']:
+            pid_candidates = self._direct_texts(target, "pid") + primary_rel["pids"]
+            doi = ""
+            for value in pid_candidates + [abstract, title] + primary_rel["titles"]:
                 doi = extract_doi(value)
                 if doi:
                     break
 
-            date_candidates = self._direct_texts(target, 'publicationdate') + \
-                self._direct_texts(target, 'dateofacceptance') + primary_rel['dates']
+            date_candidates = (
+                self._direct_texts(target, "publicationdate")
+                + self._direct_texts(target, "dateofacceptance")
+                + primary_rel["dates"]
+            )
             published_date = None
             for date_value in date_candidates:
                 published_date = self._parse_date(date_value)
                 if published_date:
                     break
 
-            direct_urls = self._direct_texts(target, 'url') + self._direct_texts(target, 'webresource')
-            code_repo_urls = self._direct_texts(target, 'codeRepositoryUrl')
+            direct_urls = self._direct_texts(target, "url") + self._direct_texts(
+                target, "webresource"
+            )
+            code_repo_urls = self._direct_texts(target, "codeRepositoryUrl")
             url_candidates = [
-                value for value in (direct_urls + code_repo_urls + primary_rel['urls'] + pid_candidates)
-                if value.startswith('http')
+                value
+                for value in (
+                    direct_urls + code_repo_urls + primary_rel["urls"] + pid_candidates
+                )
+                if value.startswith("http")
             ]
-            url = url_candidates[0] if url_candidates else (f"https://doi.org/{doi}" if doi else '')
-            pdf_url = ''
+            url = (
+                url_candidates[0]
+                if url_candidates
+                else (f"https://doi.org/{doi}" if doi else "")
+            )
+            pdf_url = ""
             for candidate in url_candidates:
                 lowered = candidate.lower()
-                if lowered.endswith('.pdf') or '/pdf' in lowered:
+                if lowered.endswith(".pdf") or "/pdf" in lowered:
                     pdf_url = candidate
                     break
 
-            obj_ids = self._direct_texts(header, 'objIdentifier')
-            paper_id = obj_ids[0] if obj_ids else f"openaire_{hash(title) & 0xffffffff:08x}"
+            obj_ids = self._direct_texts(header, "objIdentifier")
+            paper_id = (
+                obj_ids[0] if obj_ids else f"openaire_{hash(title) & 0xFFFFFFFF:08x}"
+            )
 
             if not url:
                 url = f"https://explore.openaire.eu/search/publication?articleId={paper_id}"
 
-            best_access_elem = self._first_child(target, 'bestaccessright')
-            best_access = ''
+            best_access_elem = self._first_child(target, "bestaccessright")
+            best_access = ""
             if best_access_elem is not None:
                 best_access = (
-                    best_access_elem.get('classname')
-                    or best_access_elem.get('classid')
-                    or (best_access_elem.text or '')
+                    best_access_elem.get("classname")
+                    or best_access_elem.get("classid")
+                    or (best_access_elem.text or "")
                 ).strip()
-            open_access = 'open' in best_access.lower()
+            open_access = "open" in best_access.lower()
 
-            language_elem = self._first_child(target, 'language')
-            language = ''
+            language_elem = self._first_child(target, "language")
+            language = ""
             if language_elem is not None:
                 language = (
-                    language_elem.get('classname')
-                    or language_elem.get('classid')
-                    or (language_elem.text or '')
+                    language_elem.get("classname")
+                    or language_elem.get("classid")
+                    or (language_elem.text or "")
                 ).strip()
-                if language.lower() in {'und', 'undefined', 'unknown', 'undetermined'}:
-                    language = ''
+                if language.lower() in {"und", "undefined", "unknown", "undetermined"}:
+                    language = ""
 
-            result_type_elem = self._first_child(target, 'resulttype')
-            result_type = ''
+            result_type_elem = self._first_child(target, "resulttype")
+            result_type = ""
             if result_type_elem is not None:
                 result_type = (
-                    result_type_elem.get('classname')
-                    or result_type_elem.get('classid')
-                    or (result_type_elem.text or '')
+                    result_type_elem.get("classname")
+                    or result_type_elem.get("classid")
+                    or (result_type_elem.text or "")
                 ).strip()
 
-            resource_type_elem = self._first_child(target, 'resourcetype')
-            resource_type = ''
+            resource_type_elem = self._first_child(target, "resourcetype")
+            resource_type = ""
             if resource_type_elem is not None:
                 resource_type = (
-                    resource_type_elem.get('classname')
-                    or resource_type_elem.get('classid')
-                    or (resource_type_elem.text or '')
+                    resource_type_elem.get("classname")
+                    or resource_type_elem.get("classid")
+                    or (resource_type_elem.text or "")
                 ).strip()
 
-            publisher = ''
-            publisher_candidates = self._direct_texts(target, 'publisher') + primary_rel['publishers']
+            publisher = ""
+            publisher_candidates = (
+                self._direct_texts(target, "publisher") + primary_rel["publishers"]
+            )
             if publisher_candidates:
                 publisher = publisher_candidates[0]
 
-            journal = ''
-            journal_candidates = self._direct_texts(target, 'journal')
+            journal = ""
+            journal_candidates = self._direct_texts(target, "journal")
             if journal_candidates:
                 journal = journal_candidates[0]
 
-            subject_candidates = self._direct_texts(target, 'subject')
+            subject_candidates = self._direct_texts(target, "subject")
             keywords = subject_candidates[:10]
 
             return Paper(
@@ -460,17 +506,17 @@ class OpenAiresearcher(PaperSource):
                 published_date=published_date,
                 pdf_url=pdf_url,
                 url=url,
-                source='openaire',
+                source="openaire",
                 keywords=keywords,
                 extra={
-                    'open_access': open_access,
-                    'best_access_right': best_access,
-                    'publisher': publisher,
-                    'journal': journal,
-                    'language': language,
-                    'type': result_type,
-                    'resource_type': resource_type,
-                }
+                    "open_access": open_access,
+                    "best_access_right": best_access,
+                    "publisher": publisher,
+                    "journal": journal,
+                    "language": language,
+                    "type": result_type,
+                    "resource_type": resource_type,
+                },
             )
         except Exception as exc:
             logger.warning("Error parsing OpenAIRE XML result: %s", exc)
@@ -480,18 +526,22 @@ class OpenAiresearcher(PaperSource):
         """Parse an OpenAIRE API result into a Paper object."""
         try:
             # Extract metadata from result
-            metadata = result.get('metadata', {})
+            metadata = result.get("metadata", {})
             if not metadata:
                 return None
 
             # Extract title
-            title_info = metadata.get('title', {})
+            title_info = metadata.get("title", {})
             if isinstance(title_info, dict):
-                title = title_info.get('value', '')
+                title = title_info.get("value", "")
             elif isinstance(title_info, list) and len(title_info) > 0:
-                title = title_info[0].get('value', '') if isinstance(title_info[0], dict) else str(title_info[0])
+                title = (
+                    title_info[0].get("value", "")
+                    if isinstance(title_info[0], dict)
+                    else str(title_info[0])
+                )
             else:
-                title = str(title_info) if title_info else ''
+                title = str(title_info) if title_info else ""
 
             title = title.strip()
             if not title:
@@ -499,46 +549,52 @@ class OpenAiresearcher(PaperSource):
 
             # Extract authors
             authors = []
-            creators = metadata.get('creator', [])
+            creators = metadata.get("creator", [])
             if isinstance(creators, list):
                 for creator in creators:
                     if isinstance(creator, dict):
-                        author_name = creator.get('value', '')
+                        author_name = creator.get("value", "")
                         if author_name:
                             authors.append(author_name)
                     elif isinstance(creator, str):
                         authors.append(creator)
             elif isinstance(creators, dict):
-                author_name = creators.get('value', '')
+                author_name = creators.get("value", "")
                 if author_name:
                     authors.append(author_name)
 
             # Extract abstract
-            abstract = ''
-            description = metadata.get('description', {})
+            abstract = ""
+            description = metadata.get("description", {})
             if isinstance(description, dict):
-                abstract = description.get('value', '')
+                abstract = description.get("value", "")
             elif isinstance(description, list) and len(description) > 0:
-                abstract = description[0].get('value', '') if isinstance(description[0], dict) else str(description[0])
+                abstract = (
+                    description[0].get("value", "")
+                    if isinstance(description[0], dict)
+                    else str(description[0])
+                )
             else:
-                abstract = str(description) if description else ''
+                abstract = str(description) if description else ""
 
             # Extract DOI
-            doi = ''
-            identifiers = metadata.get('identifier', [])
+            doi = ""
+            identifiers = metadata.get("identifier", [])
             if isinstance(identifiers, list):
                 for identifier in identifiers:
                     if isinstance(identifier, dict):
-                        id_value = identifier.get('value', '')
-                        id_type = identifier.get('type', '').upper()
-                        if id_type == 'DOI' and id_value:
-                            doi = id_value.replace('doi:', '').replace('https://doi.org/', '')
+                        id_value = identifier.get("value", "")
+                        id_type = identifier.get("type", "").upper()
+                        if id_type == "DOI" and id_value:
+                            doi = id_value.replace("doi:", "").replace(
+                                "https://doi.org/", ""
+                            )
                             break
             elif isinstance(identifiers, dict):
-                id_value = identifiers.get('value', '')
-                id_type = identifiers.get('type', '').upper()
-                if id_type == 'DOI' and id_value:
-                    doi = id_value.replace('doi:', '').replace('https://doi.org/', '')
+                id_value = identifiers.get("value", "")
+                id_type = identifiers.get("type", "").upper()
+                if id_type == "DOI" and id_value:
+                    doi = id_value.replace("doi:", "").replace("https://doi.org/", "")
 
             # If no DOI found in identifiers, try to extract from abstract
             if not doi and abstract:
@@ -546,49 +602,67 @@ class OpenAiresearcher(PaperSource):
 
             # Extract publication date
             published_date = None
-            dates = metadata.get('dateofacceptance', []) or metadata.get('publicationdate', [])
+            dates = metadata.get("dateofacceptance", []) or metadata.get(
+                "publicationdate", []
+            )
             if isinstance(dates, list) and len(dates) > 0:
-                date_str = dates[0].get('value', '') if isinstance(dates[0], dict) else str(dates[0])
+                date_str = (
+                    dates[0].get("value", "")
+                    if isinstance(dates[0], dict)
+                    else str(dates[0])
+                )
                 if date_str:
                     try:
                         # Try to parse date (format may vary)
-                        published_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        published_date = datetime.fromisoformat(
+                            date_str.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         try:
-                            published_date = datetime.strptime(date_str[:10], '%Y-%m-%d')
+                            published_date = datetime.strptime(
+                                date_str[:10], "%Y-%m-%d"
+                            )
                         except ValueError:
                             pass
 
             # Extract URLs
-            url = ''
-            links = result.get('header', {}).get('dri:objIdentifier', [])
+            url = ""
+            links = result.get("header", {}).get("dri:objIdentifier", [])
             if isinstance(links, list) and len(links) > 0:
-                url = links[0].get('value', '') if isinstance(links[0], dict) else str(links[0])
+                url = (
+                    links[0].get("value", "")
+                    if isinstance(links[0], dict)
+                    else str(links[0])
+                )
             elif isinstance(links, dict):
-                url = links.get('value', '')
+                url = links.get("value", "")
 
             # Construct paper ID
-            paper_id = result.get('header', {}).get('dri:objIdentifier', '')
+            paper_id = result.get("header", {}).get("dri:objIdentifier", "")
             if isinstance(paper_id, dict):
-                paper_id = paper_id.get('value', '')
+                paper_id = paper_id.get("value", "")
             elif isinstance(paper_id, list) and len(paper_id) > 0:
-                paper_id = paper_id[0].get('value', '') if isinstance(paper_id[0], dict) else str(paper_id[0])
+                paper_id = (
+                    paper_id[0].get("value", "")
+                    if isinstance(paper_id[0], dict)
+                    else str(paper_id[0])
+                )
 
             if not paper_id:
-                paper_id = f"openaire_{hash(title) & 0xffffffff:08x}"
+                paper_id = f"openaire_{hash(title) & 0xFFFFFFFF:08x}"
 
             # Extract PDF URL
-            pdf_url = ''
-            files = metadata.get('bestaccessright', {}).get('classname', '')
-            if 'OPEN' in str(files).upper():
+            pdf_url = ""
+            files = metadata.get("bestaccessright", {}).get("classname", "")
+            if "OPEN" in str(files).upper():
                 # Try to find PDF in related identifiers or files
-                relations = metadata.get('relation', [])
+                relations = metadata.get("relation", [])
                 if isinstance(relations, list):
                     for relation in relations:
                         if isinstance(relation, dict):
-                            rel_type = relation.get('type', '').upper()
-                            rel_url = relation.get('value', '')
-                            if rel_type == 'HASPAGE' and rel_url:
+                            rel_type = relation.get("type", "").upper()
+                            rel_url = relation.get("value", "")
+                            if rel_type == "HASPAGE" and rel_url:
                                 pdf_url = rel_url
                                 break
 
@@ -597,25 +671,25 @@ class OpenAiresearcher(PaperSource):
                 pdf_url = f"https://doi.org/{doi}"
 
             # Extract additional metadata
-            publisher = metadata.get('publisher', {})
+            publisher = metadata.get("publisher", {})
             if isinstance(publisher, dict):
-                publisher_name = publisher.get('value', '')
+                publisher_name = publisher.get("value", "")
             else:
-                publisher_name = str(publisher) if publisher else ''
+                publisher_name = str(publisher) if publisher else ""
 
-            journal = metadata.get('journal', {})
+            journal = metadata.get("journal", {})
             if isinstance(journal, dict):
-                journal_name = journal.get('value', '')
+                journal_name = journal.get("value", "")
             else:
-                journal_name = str(journal) if journal else ''
+                journal_name = str(journal) if journal else ""
 
             # Extract keywords
             keywords = []
-            subjects = metadata.get('subject', [])
+            subjects = metadata.get("subject", [])
             if isinstance(subjects, list):
                 for subject in subjects:
                     if isinstance(subject, dict):
-                        keyword = subject.get('value', '')
+                        keyword = subject.get("value", "")
                         if keyword:
                             keywords.append(keyword)
                     elif isinstance(subject, str):
@@ -630,18 +704,21 @@ class OpenAiresearcher(PaperSource):
                 doi=doi,
                 published_date=published_date,
                 pdf_url=pdf_url,
-                url=url if url else f"https://explore.openaire.eu/search/publication?articleId={paper_id}",
-                source='openaire',
+                url=url
+                if url
+                else f"https://explore.openaire.eu/search/publication?articleId={paper_id}",
+                source="openaire",
                 keywords=keywords[:10],
                 extra={
-                    'publisher': publisher_name,
-                    'journal': journal_name,
-                    'open_access': 'OPEN' in str(metadata.get('bestaccessright', {})).upper(),
-                    'project_id': metadata.get('projectid', ''),
-                    'organization': metadata.get('organization', ''),
-                    'language': metadata.get('language', ''),
-                    'type': metadata.get('type', ''),
-                }
+                    "publisher": publisher_name,
+                    "journal": journal_name,
+                    "open_access": "OPEN"
+                    in str(metadata.get("bestaccessright", {})).upper(),
+                    "project_id": metadata.get("projectid", ""),
+                    "organization": metadata.get("organization", ""),
+                    "language": metadata.get("language", ""),
+                    "type": metadata.get("type", ""),
+                },
             )
 
         except Exception as e:
@@ -709,10 +786,13 @@ if __name__ == "__main__":
 
     print(f"Found {len(papers)} papers:")
     for i, paper in enumerate(papers):
-        print(f"\n{i+1}. {paper.title}")
-        print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
+        print(f"\n{i + 1}. {paper.title}")
+        author_suffix = "..." if len(paper.authors) > 3 else ""
+        print(f"   Authors: {', '.join(paper.authors[:3])}{author_suffix}")
         print(f"   DOI: {paper.doi}")
-        print(f"   Year: {paper.published_date.year if paper.published_date else 'N/A'}")
+        print(
+            f"   Year: {paper.published_date.year if paper.published_date else 'N/A'}"
+        )
         print(f"   Open Access: {paper.extra.get('open_access', 'N/A')}")
         print(f"   Publisher: {paper.extra.get('publisher', 'N/A')}")
         print(f"   URL: {paper.url}")

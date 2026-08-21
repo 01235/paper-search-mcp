@@ -18,17 +18,18 @@ Legal/compliance note:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
-import os
-from typing import List, Optional, Any, Tuple
+from datetime import datetime
+from typing import Any, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,8 @@ class SSRNSearcher(PaperSource):
 
     Capabilities:
     - **search**: ✅ returns metadata (title, authors, abstract, date, URL)
-    - **download_pdf**: ⚠️ best-effort (works only when SSRN exposes a direct public PDF URL)
+    - **download_pdf**: ⚠️ best-effort (works only when SSRN exposes a direct public
+        PDF URL)
     - **read_paper**: ⚠️ best-effort (depends on downloadable PDF)
 
     No API key required; uses standard HTTP requests with polite rate-limiting.
@@ -58,7 +60,9 @@ class SSRNSearcher(PaperSource):
         self.session.headers.update(
             {
                 "User-Agent": self.USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                ),
                 "Accept-Language": "en-US,en;q=0.9",
             }
         )
@@ -178,10 +182,15 @@ class SSRNSearcher(PaperSource):
                     text_parts.append(page_text)
 
             if not text_parts:
-                return f"SSRN PDF downloaded to {pdf_path}, but no extractable text was found."
+                return (
+                    f"SSRN PDF downloaded to {pdf_path}, but no "
+                    "extractable text was found."
+                )
             return "\n\n".join(text_parts)
         except Exception as exc:
-            return f"SSRN PDF downloaded to {pdf_path}, but text extraction failed: {exc}"
+            return (
+                f"SSRN PDF downloaded to {pdf_path}, but text extraction failed: {exc}"
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -216,7 +225,9 @@ class SSRNSearcher(PaperSource):
                     if "just a moment" in body or "cf-challenge" in body:
                         last_error = "HTTP 403 — SSRN Cloudflare anti-bot challenge"
                     else:
-                        last_error = "HTTP 403 — SSRN blocked the request (bot detection)"
+                        last_error = (
+                            "HTTP 403 — SSRN blocked the request (bot detection)"
+                        )
                     continue
 
                 if response.status_code == 429:
@@ -271,12 +282,17 @@ class SSRNSearcher(PaperSource):
 
         for selector in link_candidates:
             for anchor in soup.select(selector):
-                href = (anchor.get("href") or "").strip()
+                raw_href = anchor.get("href") or ""
+                href = (
+                    " ".join(raw_href) if isinstance(raw_href, list) else raw_href
+                ).strip()
                 if not href:
                     continue
 
                 candidate = urljoin(self.BASE_URL, href)
-                if "delivery.cfm" in candidate.lower() or candidate.lower().endswith(".pdf"):
+                if "delivery.cfm" in candidate.lower() or candidate.lower().endswith(
+                    ".pdf"
+                ):
                     return candidate
 
         return ""
@@ -286,14 +302,17 @@ class SSRNSearcher(PaperSource):
         soup = BeautifulSoup(html, "html.parser")
         papers: List[Paper] = []
 
-        # SSRN result items are typically in <div class="title"> / <div class="authors"> etc.
+        # SSRN result items are typically in <div class="title"> / <div class="authors">
+        # etc.
         # The structure may shift with site updates; we use heuristic selectors.
         result_blocks = soup.select("div.result-item")
         if not result_blocks:
             # Fallback — try legacy class name
             result_blocks = soup.select("div.srp-item")
         if not result_blocks:
-            result_blocks = soup.select("article.search-result, div.search-result, li.search-result")
+            result_blocks = soup.select(
+                "article.search-result, div.search-result, li.search-result"
+            )
 
         for block in result_blocks:
             paper = self._parse_block(block)
@@ -335,7 +354,10 @@ class SSRNSearcher(PaperSource):
                 or block.select_one("span.author-name")
                 or block.select_one(".srp-authors")
             )
-            authors = authors_tag.get_text(separator=", ", strip=True) if authors_tag else ""
+            authors_text = (
+                authors_tag.get_text(separator=", ", strip=True) if authors_tag else ""
+            )
+            authors = [a.strip() for a in authors_text.split(",") if a.strip()]
 
             # Abstract
             abstract_tag = (
@@ -343,11 +365,25 @@ class SSRNSearcher(PaperSource):
                 or block.select_one("div.abstract")
                 or block.select_one(".srp-snippet")
             )
-            abstract = abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else ""
+            abstract = (
+                abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else ""
+            )
 
             # Date
-            date_tag = block.select_one(".date") or block.select_one("span.date") or block.select_one(".srp-date")
-            pub_date = date_tag.get_text(strip=True) if date_tag else ""
+            date_tag = (
+                block.select_one(".date")
+                or block.select_one("span.date")
+                or block.select_one(".srp-date")
+            )
+            pub_date_text = date_tag.get_text(strip=True) if date_tag else ""
+            pub_date_text = re.sub(r"^(Posted|Last revised):\s*", "", pub_date_text)
+            published_date = None
+            for date_format in ("%d %b %Y", "%b %Y", "%Y"):
+                try:
+                    published_date = datetime.strptime(pub_date_text, date_format)
+                    break
+                except ValueError:
+                    continue
 
             return Paper(
                 paper_id=paper_id or f"ssrn:{hash(raw_url)}",
@@ -355,7 +391,7 @@ class SSRNSearcher(PaperSource):
                 authors=authors,
                 abstract=abstract,
                 doi="",
-                published_date=pub_date,
+                published_date=published_date,
                 pdf_url="",  # not available without login
                 url=raw_url,
                 source="ssrn",

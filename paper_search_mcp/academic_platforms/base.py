@@ -1,6 +1,8 @@
 """Base class for all academic paper source searchers."""
+
 from abc import ABC, abstractmethod
 from typing import List
+
 from ..paper import Paper
 
 

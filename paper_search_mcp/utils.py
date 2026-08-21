@@ -1,5 +1,6 @@
 import re
 
+
 def extract_doi(text: str) -> str:
     """Extract DOI from arbitrary text or URL if present."""
     if not text:

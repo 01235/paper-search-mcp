@@ -1,10 +1,12 @@
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import requests
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -20,10 +22,12 @@ class UnpaywallResolver:
         configured_email = get_env("UNPAYWALL_EMAIL", "") if email is None else email
         self.email = configured_email.strip()
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": self.USER_AGENT,
-            "Accept": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": self.USER_AGENT,
+                "Accept": "application/json",
+            }
+        )
 
         if not self.email:
             logger.warning(
@@ -64,7 +68,9 @@ class UnpaywallResolver:
         except requests.RequestException as exc:
             logger.warning("Unpaywall request failed for DOI %s: %s", doi, exc)
         except Exception as exc:
-            logger.warning("Unexpected Unpaywall resolver error for DOI %s: %s", doi, exc)
+            logger.warning(
+                "Unexpected Unpaywall resolver error for DOI %s: %s", doi, exc
+            )
 
         return None
 
@@ -119,7 +125,11 @@ class UnpaywallResolver:
             or data.get("doi_url")
             or f"https://doi.org/{normalized_doi}"
         )
-        pdf_url = best_location.get("url_for_pdf") or self.resolve_best_pdf_url(normalized_doi) or ""
+        pdf_url = (
+            best_location.get("url_for_pdf")
+            or self.resolve_best_pdf_url(normalized_doi)
+            or ""
+        )
 
         abstract = ""
         is_oa = bool(data.get("is_oa"))
@@ -163,7 +173,8 @@ class UnpaywallResolver:
             if response.status_code == 422:
                 logger.warning(
                     "Unpaywall rejected the configured email (%s) with HTTP 422. "
-                    "Please use a valid contact email in PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL.",
+                    "Please use a valid contact email in "
+                    "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL.",
                     self.email,
                 )
                 return None
@@ -174,7 +185,9 @@ class UnpaywallResolver:
             logger.warning("Unpaywall request failed for DOI %s: %s", doi, exc)
             return None
         except Exception as exc:
-            logger.warning("Unexpected Unpaywall record fetch error for DOI %s: %s", doi, exc)
+            logger.warning(
+                "Unexpected Unpaywall record fetch error for DOI %s: %s", doi, exc
+            )
             return None
 
     def has_api_access(self) -> bool:
@@ -188,7 +201,9 @@ class UnpaywallSearcher(PaperSource):
     Unpaywall is metadata and OA-location provider. It does not host PDFs.
     """
 
-    def __init__(self, email: Optional[str] = None, resolver: Optional[UnpaywallResolver] = None):
+    def __init__(
+        self, email: Optional[str] = None, resolver: Optional[UnpaywallResolver] = None
+    ):
         self.resolver = resolver or UnpaywallResolver(email=email)
 
     def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
@@ -201,11 +216,14 @@ class UnpaywallSearcher(PaperSource):
         """
         if not self.resolver.has_api_access():
             logger.warning(
-                "Unpaywall search skipped: missing PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL."
+                "Unpaywall search skipped: missing "
+                "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL/UNPAYWALL_EMAIL."
             )
             return []
 
-        doi = extract_doi(query) or (query.strip() if query.strip().startswith("10.") else "")
+        doi = extract_doi(query) or (
+            query.strip() if query.strip().startswith("10.") else ""
+        )
         if not doi:
             return []
 
@@ -218,10 +236,12 @@ class UnpaywallSearcher(PaperSource):
     def download_pdf(self, paper_id: str, save_path: str = "./downloads") -> str:
         raise NotImplementedError(
             "Unpaywall does not host PDFs directly. "
-            "Use the returned pdf_url/url with download_with_fallback or source-native download tools."
+            "Use the returned pdf_url/url with download_with_fallback or "
+            "source-native download tools."
         )
 
     def read_paper(self, paper_id: str, save_path: str = "./downloads") -> str:
         raise NotImplementedError(
-            "Unpaywall provides metadata and OA links only; it does not provide direct paper text reading."
+            "Unpaywall provides metadata and OA links only; it does not "
+            "provide direct paper text reading."
         )

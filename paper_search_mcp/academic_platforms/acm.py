@@ -23,9 +23,9 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from .base import PaperSource
-from ..paper import Paper
 from ..config import get_env
+from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ class ACMSearcher(PaperSource):
         self.api_key: str = get_env("ACM_API_KEY", "")
         if not self.api_key:
             logger.warning(
-                "ACMSearcher initialised without PAPER_SEARCH_MCP_ACM_API_KEY/ACM_API_KEY.  "
+                "ACMSearcher initialised without "
+                "PAPER_SEARCH_MCP_ACM_API_KEY/ACM_API_KEY.  "
                 "All calls will raise NotImplementedError until the key is set."
             )
 
@@ -71,7 +72,9 @@ class ACMSearcher(PaperSource):
     # ------------------------------------------------------------------
 
     def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:  # type: ignore[override]
-        """Search ACM Digital Library — requires PAPER_SEARCH_MCP_ACM_API_KEY or ACM_API_KEY.
+        """Search ACM Digital Library.
+
+        Requires PAPER_SEARCH_MCP_ACM_API_KEY or ACM_API_KEY.
 
         Raises:
             NotImplementedError: Always, when ACM API key env is not set.
@@ -86,7 +89,9 @@ class ACMSearcher(PaperSource):
         )
 
     def download_pdf(self, paper_id: str, save_path: str = "./downloads") -> str:
-        """Download a PDF from ACM DL — requires ACM API key env and institutional access.
+        """Download a PDF from ACM DL.
+
+        Requires ACM API key env and institutional access.
 
         Raises:
             NotImplementedError: Always, until key + download logic are implemented.
@@ -96,7 +101,8 @@ class ACMSearcher(PaperSource):
 
         raise NotImplementedError(
             "ACM DL PDF download is not yet implemented.  "
-            "Note: full-text access also requires ACM membership or institutional access."
+            "Note: full-text access also requires ACM membership or "
+            "institutional access."
         )
 
     def read_paper(self, paper_id: str, save_path: str = "./downloads") -> str:
@@ -108,6 +114,4 @@ class ACMSearcher(PaperSource):
         if not self.is_configured():
             raise NotImplementedError(_NOT_CONFIGURED_MSG)
 
-        raise NotImplementedError(
-            "ACM DL paper reading is not yet implemented."
-        )
+        raise NotImplementedError("ACM DL paper reading is not yet implemented.")
