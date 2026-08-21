@@ -1,7 +1,8 @@
 # tests/test_dblp.py
 import unittest
-import os
+
 import requests
+
 from paper_search_mcp.academic_platforms.dblp import DBLPSearcher
 
 
@@ -11,11 +12,11 @@ def check_api_accessible():
         # Test dblp API with a simple query
         response = requests.get(
             "https://dblp.org/search/publ/api",
-            params={'q': 'test', 'format': 'xml', 'h': 1},
-            timeout=10
+            params={"q": "test", "format": "xml", "h": 1},
+            timeout=10,
         )
         return response.status_code == 200
-    except:
+    except requests.RequestException:
         return False
 
 
@@ -38,7 +39,8 @@ class TestDBLPSearcher(unittest.TestCase):
 
         for i, paper in enumerate(papers, 1):
             print(f"{i}. {paper.title}")
-            print(f"   Authors: {', '.join(paper.authors[:2])}{'...' if len(paper.authors) > 2 else ''}")
+            author_suffix = "..." if len(paper.authors) > 2 else ""
+            print(f"   Authors: {', '.join(paper.authors[:2])}{author_suffix}")
             print(f"   Year: {paper.extra.get('year', 'N/A')}")
             print(f"   Venue: {paper.extra.get('venue', 'N/A')}")
             print(f"   DOI: {paper.doi if paper.doi else 'N/A'}")
@@ -48,22 +50,20 @@ class TestDBLPSearcher(unittest.TestCase):
         self.assertTrue(len(papers) > 0)
         if papers:
             self.assertTrue(papers[0].title)
-            self.assertEqual(papers[0].source, 'dblp')
+            self.assertEqual(papers[0].source, "dblp")
 
     def test_search_with_year_filter(self):
         if not self.api_accessible:
             self.skipTest("dblp API is not accessible")
 
-        papers = self.searcher.search(
-            "deep learning",
-            max_results=3,
-            year="2020"
+        papers = self.searcher.search("deep learning", max_results=3, year="2020")
+        print(
+            f"Found {len(papers)} papers from dblp for query 'deep learning' year 2020"
         )
-        print(f"Found {len(papers)} papers from dblp for query 'deep learning' year 2020")
 
         if papers:
             for paper in papers:
-                year = paper.extra.get('year', '')
+                year = paper.extra.get("year", "")
                 if year:
                     print(f"Paper '{paper.title}' published in {year}")
 
@@ -73,16 +73,15 @@ class TestDBLPSearcher(unittest.TestCase):
         if not self.api_accessible:
             self.skipTest("dblp API is not accessible")
 
-        papers = self.searcher.search(
-            "neural networks",
-            max_results=3,
-            author="Bengio"
+        papers = self.searcher.search("neural networks", max_results=3, author="Bengio")
+        print(
+            f"Found {len(papers)} papers from dblp for query "
+            "'neural networks' author Bengio"
         )
-        print(f"Found {len(papers)} papers from dblp for query 'neural networks' author Bengio")
 
         if papers:
             for paper in papers:
-                authors_str = ', '.join(paper.authors)
+                authors_str = ", ".join(paper.authors)
                 print(f"Paper '{paper.title}' by {authors_str}")
 
         self.assertTrue(len(papers) >= 0)
@@ -91,16 +90,12 @@ class TestDBLPSearcher(unittest.TestCase):
         if not self.api_accessible:
             self.skipTest("dblp API is not accessible")
 
-        papers = self.searcher.search(
-            "database",
-            max_results=3,
-            venue="SIGMOD"
-        )
+        papers = self.searcher.search("database", max_results=3, venue="SIGMOD")
         print(f"Found {len(papers)} papers from dblp for query 'database' venue SIGMOD")
 
         if papers:
             for paper in papers:
-                venue = paper.extra.get('venue', '')
+                venue = paper.extra.get("venue", "")
                 print(f"Paper '{paper.title}' published at {venue}")
 
         self.assertTrue(len(papers) >= 0)
@@ -127,7 +122,7 @@ class TestDBLPSearcher(unittest.TestCase):
             "computer vision",
             "distributed systems",
             "software engineering",
-            "cryptography"
+            "cryptography",
         ]
 
         for query in test_queries[:2]:  # Just test first 2 to avoid too many requests
@@ -142,8 +137,8 @@ class TestDBLPSearcher(unittest.TestCase):
         import xml.etree.ElementTree as ET
 
         # Create an invalid XML element
-        root = ET.Element('root')
-        hit = ET.SubElement(root, 'hit')
+        root = ET.Element("root")
+        hit = ET.SubElement(root, "hit")
         # Missing 'info' element
 
         # This should return None without raising exception
@@ -151,5 +146,5 @@ class TestDBLPSearcher(unittest.TestCase):
         self.assertIsNone(paper)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

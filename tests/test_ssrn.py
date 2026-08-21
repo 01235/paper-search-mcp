@@ -26,14 +26,16 @@ class TestSSRNSearcher(unittest.TestCase):
         self.assertEqual(paper.source, "ssrn")
         self.assertEqual(paper.title, "SSRN Parser Test")
         self.assertTrue(paper.paper_id.startswith("ssrn:"))
-        self.assertIn("Alice", paper.authors)
+        self.assertIn("Alice Example", paper.authors)
         self.assertIn("sample abstract", paper.abstract)
 
     def test_parse_results_legacy_layout(self):
         html = """
         <html><body>
           <div class="srp-item">
-            <div class="title"><a href="/sol3/papers.cfm?abstract_id=7654321">Legacy SSRN Item</a></div>
+            <div class="title">
+              <a href="/sol3/papers.cfm?abstract_id=7654321">Legacy SSRN Item</a>
+            </div>
             <div class="srp-authors">Carol Example</div>
             <div class="srp-snippet">Legacy snippet abstract text.</div>
             <div class="srp-date">2021</div>
@@ -44,16 +46,20 @@ class TestSSRNSearcher(unittest.TestCase):
         papers = self.searcher._parse_results(html)
         self.assertEqual(len(papers), 1)
         self.assertEqual(papers[0].title, "Legacy SSRN Item")
-        self.assertIn("Carol", papers[0].authors)
+        self.assertIn("Carol Example", papers[0].authors)
 
     def test_parse_results_invalid_html(self):
-        papers = self.searcher._parse_results("<html><body><p>no results here</p></body></html>")
+        papers = self.searcher._parse_results(
+            "<html><body><p>no results here</p></body></html>"
+        )
         self.assertEqual(papers, [])
 
     def test_extract_abstract_id(self):
         self.assertEqual(self.searcher._extract_abstract_id("ssrn:1234567"), "1234567")
         self.assertEqual(
-            self.searcher._extract_abstract_id("https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1234567"),
+            self.searcher._extract_abstract_id(
+                "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1234567"
+            ),
             "1234567",
         )
         self.assertEqual(self.searcher._extract_abstract_id("invalid"), "")
@@ -67,6 +73,7 @@ class TestSSRNSearcher(unittest.TestCase):
             def raise_for_status(self):
                 if self.status_code >= 400:
                     import requests
+
                     raise requests.HTTPError(f"status={self.status_code}")
 
         with patch.object(
@@ -88,7 +95,9 @@ class TestSSRNSearcher(unittest.TestCase):
         self.assertIn("no publicly accessible ssrn pdf url", result.lower())
 
     def test_read_returns_message_when_download_fails(self):
-        with patch.object(self.searcher, "download_pdf", return_value="No PDF available"):
+        with patch.object(
+            self.searcher, "download_pdf", return_value="No PDF available"
+        ):
             result = self.searcher.read_paper("ssrn:1234567")
         self.assertIn("no pdf", result.lower())
 

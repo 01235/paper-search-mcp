@@ -1,4 +1,5 @@
 import unittest
+
 import requests
 
 from paper_search_mcp.academic_platforms.base_search import BASESearcher
@@ -26,7 +27,10 @@ class TestBASESearcher(unittest.TestCase):
     def setUpClass(cls):
         cls.api_accessible = check_api_accessible()
         if not cls.api_accessible:
-            print("\nWarning: BASE OAI-PMH endpoint is not accessible, network tests will be skipped")
+            print(
+                "\nWarning: BASE OAI-PMH endpoint is not accessible, "
+                "network tests will be skipped"
+            )
 
     def setUp(self):
         self.searcher = BASESearcher()

@@ -1,12 +1,13 @@
 import unittest
-import requests
 from unittest.mock import Mock, patch
+
+import requests
 
 from paper_search_mcp.academic_platforms.citeseerx import CiteSeerXSearcher
 
 
 def check_api_accessible() -> bool:
-    """Check whether CiteSeerX search API is reachable and *not* redirecting to archive."""
+    """Check CiteSeerX search API is reachable and *not* redirecting to archive."""
     try:
         response = requests.get(
             "https://citeseerx.ist.psu.edu/api/search",
@@ -23,7 +24,10 @@ class TestCiteSeerXSearcher(unittest.TestCase):
     def setUpClass(cls):
         cls.api_accessible = check_api_accessible()
         if not cls.api_accessible:
-            print("\nWarning: CiteSeerX API is not accessible, network tests will be skipped")
+            print(
+                "\nWarning: CiteSeerX API is not accessible, network tests "
+                "will be skipped"
+            )
 
     def setUp(self):
         self.searcher = CiteSeerXSearcher()

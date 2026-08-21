@@ -1,6 +1,7 @@
 # tests/test_arxiv.py
 import unittest
 from unittest.mock import patch
+
 from paper_search_mcp.academic_platforms.arxiv import ArxivSearcher, _build_search_query
 
 
@@ -13,7 +14,9 @@ class TestCourtesyPacing(unittest.TestCase):
 
     def test_first_request_does_not_wait(self):
         searcher = ArxivSearcher()
-        with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep:
+        with patch(
+            "paper_search_mcp.academic_platforms.arxiv.time.sleep"
+        ) as mock_sleep:
             searcher._wait_for_courtesy_window()
         mock_sleep.assert_not_called()
 
@@ -28,7 +31,10 @@ class TestCourtesyPacing(unittest.TestCase):
             return fake_now[0]
 
         with (
-            patch("paper_search_mcp.academic_platforms.arxiv.time.monotonic", side_effect=advancing_monotonic),
+            patch(
+                "paper_search_mcp.academic_platforms.arxiv.time.monotonic",
+                side_effect=advancing_monotonic,
+            ),
             patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep,
         ):
             searcher._wait_for_courtesy_window()
@@ -36,7 +42,9 @@ class TestCourtesyPacing(unittest.TestCase):
 
         mock_sleep.assert_called_once()
         (waited,) = mock_sleep.call_args.args
-        self.assertAlmostEqual(waited, ArxivSearcher._MIN_REQUEST_INTERVAL - 0.1, places=6)
+        self.assertAlmostEqual(
+            waited, ArxivSearcher._MIN_REQUEST_INTERVAL - 0.1, places=6
+        )
 
     def test_request_after_the_window_has_elapsed_does_not_wait(self):
         searcher = ArxivSearcher()
@@ -45,7 +53,9 @@ class TestCourtesyPacing(unittest.TestCase):
             "paper_search_mcp.academic_platforms.arxiv.time.monotonic",
             return_value=ArxivSearcher._MIN_REQUEST_INTERVAL + 10,
         ):
-            with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as mock_sleep:
+            with patch(
+                "paper_search_mcp.academic_platforms.arxiv.time.sleep"
+            ) as mock_sleep:
                 searcher._wait_for_courtesy_window()
         mock_sleep.assert_not_called()
 
@@ -66,10 +76,15 @@ class TestBuildSearchQuery(unittest.TestCase):
         )
 
     def test_already_quoted_passed_through(self):
-        self.assertEqual(_build_search_query('all:"exact phrase"'), 'all:"exact phrase"')
+        self.assertEqual(
+            _build_search_query('all:"exact phrase"'), 'all:"exact phrase"'
+        )
 
     def test_explicit_field_prefix_passed_through_unwrapped(self):
-        self.assertEqual(_build_search_query("ti:Attention Is All You Need"), "ti:Attention Is All You Need")
+        self.assertEqual(
+            _build_search_query("ti:Attention Is All You Need"),
+            "ti:Attention Is All You Need",
+        )
 
     def test_boolean_operator_passed_through(self):
         self.assertEqual(
@@ -104,5 +119,5 @@ class TestArxivSearcher(unittest.TestCase):
         self.assertTrue(any("attention" in p.title.lower() for p in papers))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

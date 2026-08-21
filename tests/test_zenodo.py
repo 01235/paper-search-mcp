@@ -1,4 +1,5 @@
 import unittest
+
 import requests
 
 from paper_search_mcp.academic_platforms.zenodo import ZenodoSearcher
@@ -22,7 +23,9 @@ class TestZenodoSearcher(unittest.TestCase):
     def setUpClass(cls):
         cls.api_accessible = check_api_accessible()
         if not cls.api_accessible:
-            print("\nWarning: Zenodo API is not accessible, network tests will be skipped")
+            print(
+                "\nWarning: Zenodo API is not accessible, network tests will be skipped"
+            )
 
     def setUp(self):
         self.searcher = ZenodoSearcher()
@@ -41,7 +44,9 @@ class TestZenodoSearcher(unittest.TestCase):
             self.assertEqual(first.source, "zenodo")
 
     def test_extract_record_id(self):
-        self.assertEqual(self.searcher._extract_record_id("10.5281/zenodo.1234567"), "1234567")
+        self.assertEqual(
+            self.searcher._extract_record_id("10.5281/zenodo.1234567"), "1234567"
+        )
         self.assertEqual(self.searcher._extract_record_id("1234567"), "1234567")
         self.assertEqual(self.searcher._extract_record_id("not-a-zenodo-id"), "")
 
@@ -58,7 +63,9 @@ class TestZenodoSearcher(unittest.TestCase):
             "files": [
                 {
                     "key": "paper.pdf",
-                    "links": {"self": "https://zenodo.org/records/12345/files/paper.pdf"},
+                    "links": {
+                        "self": "https://zenodo.org/records/12345/files/paper.pdf"
+                    },
                 }
             ],
             "links": {"html": "https://zenodo.org/record/12345"},

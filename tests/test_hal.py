@@ -1,4 +1,5 @@
 import unittest
+
 import requests
 
 from paper_search_mcp.academic_platforms.hal import HALSearcher
@@ -41,7 +42,9 @@ class TestHALSearcher(unittest.TestCase):
             self.assertEqual(first.source, "hal")
 
     def test_normalise_id(self):
-        self.assertEqual(self.searcher._normalise_id("hal:hal-01234567"), "hal-01234567")
+        self.assertEqual(
+            self.searcher._normalise_id("hal:hal-01234567"), "hal-01234567"
+        )
         self.assertEqual(self.searcher._normalise_id("hal-01234567"), "hal-01234567")
 
     def test_parse_doc_minimal(self):

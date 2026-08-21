@@ -9,12 +9,16 @@ from paper_search_mcp.paper import Paper
 
 class TestUnpaywallSearchSource(unittest.TestCase):
     def test_search_unpaywall_empty_without_access(self):
-        with patch.object(server.unpaywall_resolver, "has_api_access", return_value=False):
+        with patch.object(
+            server.unpaywall_resolver, "has_api_access", return_value=False
+        ):
             result = asyncio.run(server.search_unpaywall("10.1000/test"))
         self.assertEqual(result, [])
 
     def test_search_unpaywall_empty_without_doi(self):
-        with patch.object(server.unpaywall_resolver, "has_api_access", return_value=True):
+        with patch.object(
+            server.unpaywall_resolver, "has_api_access", return_value=True
+        ):
             result = asyncio.run(server.search_unpaywall("machine learning"))
         self.assertEqual(result, [])
 
@@ -31,8 +35,14 @@ class TestUnpaywallSearchSource(unittest.TestCase):
             source="unpaywall",
         )
 
-        with patch.object(server.unpaywall_resolver, "has_api_access", return_value=True), \
-             patch.object(server.unpaywall_resolver, "get_paper_by_doi", return_value=paper):
+        with (
+            patch.object(
+                server.unpaywall_resolver, "has_api_access", return_value=True
+            ),
+            patch.object(
+                server.unpaywall_resolver, "get_paper_by_doi", return_value=paper
+            ),
+        ):
             result = asyncio.run(server.search_unpaywall("doi:10.1000/test"))
 
         self.assertEqual(len(result), 1)

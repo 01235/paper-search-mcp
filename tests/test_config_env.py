@@ -43,9 +43,16 @@ class TestConfigEnv(unittest.TestCase):
             self.assertEqual(config.get_env("CORE_API_KEY", "default"), "")
 
     def test_loads_from_custom_env_file(self):
-        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=True) as tmp:
+        # delete=False + explicit close/cleanup: NamedTemporaryFile(delete=True)
+        # holds an exclusive lock on Windows, so a second open() (here, via
+        # config.load_env_file) would fail with PermissionError while the
+        # handle is still open.
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".env", delete=False, encoding="utf-8"
+        )
+        try:
             tmp.write("PAPER_SEARCH_MCP_UNPAYWALL_EMAIL=test@example.com\n")
-            tmp.flush()
+            tmp.close()
 
             with patch.dict(
                 os.environ,
@@ -55,7 +62,11 @@ class TestConfigEnv(unittest.TestCase):
                 clear=True,
             ):
                 config.load_env_file(force=True)
-                self.assertEqual(config.get_env("UNPAYWALL_EMAIL", ""), "test@example.com")
+                self.assertEqual(
+                    config.get_env("UNPAYWALL_EMAIL", ""), "test@example.com"
+                )
+        finally:
+            os.unlink(tmp.name)
 
 
 if __name__ == "__main__":

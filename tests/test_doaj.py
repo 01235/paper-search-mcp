@@ -1,4 +1,5 @@
 import unittest
+
 import requests
 
 from paper_search_mcp.academic_platforms.doaj import DOAJSearcher
@@ -22,7 +23,9 @@ class TestDOAJSearcher(unittest.TestCase):
     def setUpClass(cls):
         cls.api_accessible = check_api_accessible()
         if not cls.api_accessible:
-            print("\nWarning: DOAJ API is not accessible, network tests will be skipped")
+            print(
+                "\nWarning: DOAJ API is not accessible, network tests will be skipped"
+            )
 
     def setUp(self):
         self.searcher = DOAJSearcher()

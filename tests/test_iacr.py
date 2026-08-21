@@ -1,6 +1,8 @@
-import unittest
 import os
+import unittest
+
 import requests
+
 from paper_search_mcp.academic_platforms.iacr import IACRSearcher
 
 
@@ -9,7 +11,7 @@ def check_iacr_accessible():
     try:
         response = requests.get("https://eprint.iacr.org", timeout=5)
         return response.status_code == 200
-    except:
+    except requests.RequestException:
         return False
 
 
@@ -19,7 +21,8 @@ class TestIACRSearcher(unittest.TestCase):
         cls.iacr_accessible = check_iacr_accessible()
         if not cls.iacr_accessible:
             print(
-                "\nWarning: IACR ePrint Archive is not accessible, some tests will be skipped"
+                "\nWarning: IACR ePrint Archive is not accessible, some "
+                "tests will be skipped"
             )
 
     def setUp(self):
@@ -57,8 +60,8 @@ class TestIACRSearcher(unittest.TestCase):
     @unittest.skipUnless(check_iacr_accessible(), "IACR not accessible")
     def test_download_pdf_functionality(self):
         """Test PDF download method with actual download"""
-        import tempfile
         import shutil
+        import tempfile
 
         # Create a temporary directory for testing
         test_dir = tempfile.mkdtemp(prefix="iacr_test_")
@@ -110,8 +113,8 @@ class TestIACRSearcher(unittest.TestCase):
     @unittest.skipUnless(check_iacr_accessible(), "IACR not accessible")
     def test_read_paper_functionality(self):
         """Test read paper method with text extraction functionality"""
-        import tempfile
         import shutil
+        import tempfile
 
         # Create a temporary directory for testing
         test_dir = tempfile.mkdtemp(prefix="iacr_read_test_")
@@ -156,7 +159,8 @@ class TestIACRSearcher(unittest.TestCase):
                 print(f"Read paper result: {result}")
                 # For network issues or PDF extraction problems, don't fail
                 print(
-                    "Note: This might be due to network issues or PDF extraction limitations"
+                    "Note: This might be due to network issues or PDF "
+                    "extraction limitations"
                 )
 
         except Exception as e:
@@ -265,7 +269,8 @@ class TestIACRSearcher(unittest.TestCase):
         compact_time = time.time() - start_time
 
         print(
-            f"Compact search took {compact_time:.2f} seconds for {len(compact_papers)} papers"
+            f"Compact search took {compact_time:.2f} seconds for "
+            f"{len(compact_papers)} papers"
         )
 
         # Test detailed search time
@@ -277,12 +282,14 @@ class TestIACRSearcher(unittest.TestCase):
         detailed_time = time.time() - start_time
 
         print(
-            f"Detailed search took {detailed_time:.2f} seconds for {len(detailed_papers)} papers"
+            f"Detailed search took {detailed_time:.2f} seconds for "
+            f"{len(detailed_papers)} papers"
         )
 
-        # Detailed search should take longer (but this might not always be true due to network variability)
+        # Detailed search should take longer (but this might not always be true due to
+        # network variability)
         print(
-            f"Performance ratio (detailed/compact): {detailed_time/compact_time:.2f}x"
+            f"Performance ratio (detailed/compact): {detailed_time / compact_time:.2f}x"
         )
 
         # Both should return the same number of papers
@@ -294,12 +301,14 @@ class TestIACRSearcher(unittest.TestCase):
             compact_paper = compact_papers[0]
 
             # Detailed should have more keywords and longer abstracts typically
-            print(f"Information comparison for first paper:")
+            print("Information comparison for first paper:")
             print(
-                f"  Compact - Keywords: {len(compact_paper.keywords)}, Abstract: {len(compact_paper.abstract)} chars"
+                f"  Compact - Keywords: {len(compact_paper.keywords)}, "
+                f"Abstract: {len(compact_paper.abstract)} chars"
             )
             print(
-                f"  Detailed - Keywords: {len(detailed_paper.keywords)}, Abstract: {len(detailed_paper.abstract)} chars"
+                f"  Detailed - Keywords: {len(detailed_paper.keywords)}, "
+                f"Abstract: {len(detailed_paper.abstract)} chars"
             )
 
 

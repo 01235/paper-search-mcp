@@ -1,19 +1,24 @@
-import unittest
 import os
-import requests
 import tempfile
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+import requests
+
 from paper_search_mcp.academic_platforms.semantic import SemanticSearcher
 
 
 def check_semantic_accessible():
     """Check if Semantic Scholar is accessible"""
     try:
-        response = requests.get("https://api.semanticscholar.org/graph/v1/paper/5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", timeout=5)
+        response = requests.get(
+            "https://api.semanticscholar.org/graph/v1/paper/5bbfdf2e62f0508c65ba6de9c72fe2066fd98138",
+            timeout=5,
+        )
         return response.status_code == 200
-    except:
+    except requests.RequestException:
         return False
 
 
@@ -23,7 +28,8 @@ class TestSemanticSearcher(unittest.TestCase):
         cls.semantic_accessible = check_semantic_accessible()
         if not cls.semantic_accessible:
             print(
-                "\nWarning: Semantic Scholar is not accessible, some tests will be skipped"
+                "\nWarning: Semantic Scholar is not accessible, some "
+                "tests will be skipped"
             )
 
     def setUp(self):
@@ -37,7 +43,10 @@ class TestSemanticSearcher(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="semantic_mock_download_") as test_dir:
             with patch.object(self.searcher, "get_paper_details", return_value=paper):
-                with patch("paper_search_mcp.academic_platforms.semantic.requests.get", return_value=response):
+                with patch(
+                    "paper_search_mcp.academic_platforms.semantic.requests.get",
+                    return_value=response,
+                ):
                     result = self.searcher.download_pdf("paper/123", test_dir)
 
             expected_path = Path(test_dir) / "semantic_paper_123.pdf"
@@ -61,7 +70,7 @@ class TestSemanticSearcher(unittest.TestCase):
 
         paper = self.searcher._parse_paper(item)
 
-        self.assertIsNotNone(paper)
+        assert paper is not None
         self.assertIsNone(paper.published_date)
 
     @unittest.skipUnless(check_semantic_accessible(), "Semantic Scholar not accessible")
@@ -96,8 +105,8 @@ class TestSemanticSearcher(unittest.TestCase):
     @unittest.skipUnless(check_semantic_accessible(), "Semantic Scholar not accessible")
     def test_download_pdf_functionality(self):
         """Test PDF download method with actual download"""
-        import tempfile
         import shutil
+        import tempfile
 
         # Create a temporary directory for testing
         test_dir = tempfile.mkdtemp(prefix="semantic_test_")
@@ -149,8 +158,8 @@ class TestSemanticSearcher(unittest.TestCase):
     @unittest.skipUnless(check_semantic_accessible(), "Semantic Scholar not accessible")
     def test_read_paper_functionality(self):
         """Test read paper method with text extraction functionality"""
-        import tempfile
         import shutil
+        import tempfile
 
         # Create a temporary directory for testing
         test_dir = tempfile.mkdtemp(prefix="semantic_read_test_")
@@ -195,7 +204,8 @@ class TestSemanticSearcher(unittest.TestCase):
                 print(f"Read paper result: {result}")
                 # For network issues or PDF extraction problems, don't fail
                 print(
-                    "Note: This might be due to network issues or PDF extraction limitations"
+                    "Note: This might be due to network issues or PDF "
+                    "extraction limitations"
                 )
 
         except Exception as e:
@@ -214,7 +224,9 @@ class TestSemanticSearcher(unittest.TestCase):
         paper_details = self.searcher.get_paper_details(paper_id)
 
         if not paper_details:
-            self.skipTest("Semantic Scholar details endpoint is rate-limited or unavailable")
+            self.skipTest(
+                "Semantic Scholar details endpoint is rate-limited or unavailable"
+            )
 
         # Test basic attributes
         self.assertTrue(paper_details.title)
@@ -298,16 +310,13 @@ class TestSemanticSearcher(unittest.TestCase):
         # Test detailed search time
         print("\nTesting detailed search performance...")
         start_time = time.time()
-        compact_papers = self.searcher.search(
-            query, max_results=max_results
-        )
+        compact_papers = self.searcher.search(query, max_results=max_results)
         compact_time = time.time() - start_time
 
         print(
-            f"Compact search took {compact_time:.2f} seconds for {len(compact_papers)} papers"
+            f"Compact search took {compact_time:.2f} seconds for "
+            f"{len(compact_papers)} papers"
         )
-
-
 
 
 if __name__ == "__main__":
