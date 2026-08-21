@@ -173,3 +173,6 @@ cython_debug/
 ./test_downloads
 downloads/
 test_downloads/
+.venv/
+.ruff_cache/
+.mutmut-cache

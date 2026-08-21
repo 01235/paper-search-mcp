@@ -57,3 +57,24 @@ paper-search = "paper_search_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["paper_search_mcp"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+# Only test_*.py is the automated suite. e2e_test.py and functional_test.py are
+# standalone live-network smoke scripts (see their own docstrings: "Run with:
+# python tests/<name>.py") - pytest's *_test.py default would otherwise import
+# and execute them (hitting every academic platform's live API) as a side
+# effect of collection.
+python_files = ["test_*.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.4",
+    "ty>=0.0.73",
+]

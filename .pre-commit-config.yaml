@@ -1,0 +1,29 @@
+# Runs on this machine before a commit is created — a gate on what enters
+# history. Keep it fast (a couple of seconds); it stands between you and every
+# commit. The test suite and `ty check` don't run here — `ty` has no
+# auto-fix, unlike ruff, so it belongs somewhere a wall of pre-existing
+# errors on an unrelated commit doesn't block you. Run both yourself before
+# committing (see references/dev-workflow.md).
+#
+# The config alone does nothing. Install the hook once per clone:
+#   uv tool install pre-commit
+#   pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: detect-private-key
