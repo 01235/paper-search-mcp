@@ -1,6 +1,7 @@
 # paper_search_mcp/sources/arxiv.py
 from typing import List
 from datetime import datetime
+import re
 import requests
 import feedparser
 import time
@@ -10,9 +11,44 @@ from .base import PaperSource
 from pypdf import PdfReader
 import os
 
+_ARXIV_FIELD_PREFIX_RE = re.compile(r'^(ti|au|abs|co|jr|cat|rn|id|all):')
+_ARXIV_BOOLEAN_OP_RE = re.compile(r'\b(AND|OR|ANDNOT)\b')
+
+
+def _build_search_query(query: str) -> str:
+    """Build an arXiv API ``search_query`` value from a free-text query.
+
+    A bare multi-word query passed straight into ``all:`` (e.g.
+    ``all:attention is all you need``) hits a pathologically slow -- often
+    effectively hanging -- code path on arXiv's search backend; the exact
+    same words as a quoted phrase (``all:"attention is all you need"``)
+    return in well under a second. Confirmed empirically 2026-08-21 (see
+    https://github.com/openags/paper-search-mcp/issues -- HTTP->HTTPS +
+    unquoted multi-word query hang). Only a plain multi-word query gets
+    phrase-quoted here: a caller already using arXiv's own syntax (a field
+    prefix like ``ti:``/``au:``, an explicit ``AND``/``OR``/``ANDNOT``, or
+    their own quoting) is passed straight through unchanged, since wrapping
+    an already-structured query in quotes could change its meaning.
+    """
+    q = query.strip()
+    if not q:
+        return 'all:'
+    has_field_prefix = bool(_ARXIV_FIELD_PREFIX_RE.match(q))
+    looks_structured = '"' in q or bool(_ARXIV_BOOLEAN_OP_RE.search(q)) or has_field_prefix
+    if looks_structured:
+        return q if has_field_prefix else f'all:{q}'
+    if ' ' in q:
+        return f'all:"{q}"'
+    return f'all:{q}'
+
 class ArxivSearcher(PaperSource):
     """Searcher for arXiv papers"""
-    BASE_URL = "http://export.arxiv.org/api/query"
+    # export.arxiv.org's HTTP endpoint hangs on the HTTP->HTTPS upgrade in
+    # some network environments (observed: instant response over https://,
+    # a 30s read-timeout-per-attempt hang over http:// with no server error
+    # to retry against) — use https:// directly rather than relying on a
+    # redirect that may never resolve.
+    BASE_URL = "https://export.arxiv.org/api/query"
 
     def __init__(self):
         self.session = requests.Session()
@@ -23,7 +59,7 @@ class ArxivSearcher(PaperSource):
 
     def search(self, query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> List[Paper]:
         params = {
-            'search_query': f'all:{query}',
+            'search_query': _build_search_query(query),
             'max_results': max_results,
             'sortBy': sort_by,
             'sortOrder': sort_order,
