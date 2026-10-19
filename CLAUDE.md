@@ -173,8 +173,8 @@ configuration is added, it belongs once at the entry point (`server.py`'s
 ## Git
 
 - **`main`, never `master`.**
-- Commits are the user's own — **no `Co-Authored-By`, no "Generated with"
-  footer, no Claude in the author field.**
+- Commit with the user's git identity as the author. **Do not add a
+  `Co-Authored-By` trailer or a "Generated with" footer.**
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
   `chore:`, `perf:`.
 - Push and open PRs only when asked, under the user's own `gh` login.
