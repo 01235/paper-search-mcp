@@ -1,27 +1,25 @@
-# paper_search_mcp
+# paper-search-mcp
 
-A MCP server for searching and downloading academic papers from multiple sources.
+An MCP server that searches for academic papers in multiple sources and downloads them, with a command-line interface (CLI) to the same sources.
 
 **Stack:** python · cli
 
+## Workflow
+
+The imported file below describes the modes of work, how specs and code are reviewed, and which documents this repository keeps.
+
+@~/Code/repository-conventions/workflow.md
+
 ## Environment
 
-- Windows 10, PowerShell is the primary shell. Bash (Git Bash) is available but
-  the two take different syntax — no `&&` chaining, no `2>/dev/null`, no
-  here-strings in PowerShell 5.1.
+- The operating system is Windows 10. PowerShell is the primary shell. Bash (Git Bash) is also available and uses a different syntax. PowerShell 5.1 has no `&&` chaining, no `2>/dev/null`, and no Bash heredocs (`<<EOF`). Its here-strings are written `@'...'@`.
 - Paths contain spaces. Quote them.
-- Python managed by `uv` - never bare `pip` or `venv`. CLI tools install with `uv tool install --editable .`
-- **UTF-8 everywhere — set it up front, don't wait to hit the bug.** Windows
-  defaults to the system codepage, not UTF-8, for console output and file
-  I/O — the moment non-ASCII text (an em-dash, a curly quote, any real
-  multilingual content) hits an unconfigured `print()` or `open()`, that's a
-  `UnicodeEncodeError`/`UnicodeDecodeError`. Rust and Node default to UTF-8
-  already; this is a Python-specific gotcha.
-  - Reconfigure stdout/stderr once, at the top of `main()`, before anything
-    prints: `sys.stdout.reconfigure(encoding="utf-8")` /
-    `sys.stderr.reconfigure(encoding="utf-8")` — a no-op if already UTF-8.
-  - Pass `encoding="utf-8"` to every `open()` / `read_text()` /
-    `write_text()` call. Never rely on the platform default.
+- uv manages Python, the virtual environment, and the dependencies: `uv add` adds a dependency and `uv run` runs a command in the project environment. `uv tool install --editable .` installs the commands `paper-search-mcp` and `paper-search`, so that edits to the source take effect without reinstalling.
+- On Windows, Python uses the ANSI code page for standard input, output, and error when they are a pipe or a file, for example when another program captures the output, and for `open()` without an `encoding` argument. On a machine whose ANSI code page is not UTF-8 (65001), writing a character that the code page does not contain then raises `UnicodeEncodeError`, and reading UTF-8 text returns wrong characters or raises `UnicodeDecodeError`. Set UTF-8 before the first input or output, so that the code behaves the same on every machine:
+  - call `sys.stdout.reconfigure(encoding="utf-8")` and `sys.stderr.reconfigure(encoding="utf-8")` at the top of `main()` in `server.py` and in `cli.py`, before anything prints;
+  - pass `encoding="utf-8"` to every `open()` in text mode, and to every `read_text()` and `write_text()` call. A binary-mode `open()` takes no encoding.
+
+  Rust and Node use UTF-8 by default.
 
 ## Commands
 
@@ -34,11 +32,8 @@ uv run pytest
 ```
 
 ```bash
-uv run ruff check .
-```
-
-```bash
-uv run ruff format .
+uv run ruff check
+uv run ruff format
 ```
 
 ```bash
@@ -53,178 +48,81 @@ uv run paper-search-mcp
 uv run paper-search
 ```
 
-The server has zero required configuration - every academic-source connector
-works against free/public endpoints out of the box. Optional API keys (CORE,
-Semantic Scholar, DOAJ, Unpaywall, Zenodo, etc.) improve rate limits or unblock
-specific sources; see `docs/EXT-DEPS.md` and `.env.example`. IEEE Xplore and
-ACM DL are opt-in skeletons that stay dormant (`NotImplementedError` on
-download/read) until their API key env var is set.
+- `uv sync` installs the package, its dependencies, and the `dev` dependency group (pytest, ruff, and ty) into the project environment.
+- Many test files call the live APIs of the sources, so `uv run pytest` needs network access. Most of these files skip a test when the API does not answer. `tests/test_pubmed.py` and `tests/test_server.py` do not skip, so they fail without network access. The test files that `.github/workflows/publish.yml` runs need no network access: `tests/test_package_entrypoints.py`, `tests/test_config_env.py`, `tests/test_unpaywall.py`, and `tests/test_unpaywall_source.py`.
+- `tests/e2e_test.py` and `tests/functional_test.py` are scripts that call the live APIs of the sources. Neither script calls IEEE Xplore or the ACM Digital Library, and `tests/functional_test.py` also leaves out OpenAlex. Pytest does not collect them, because `pyproject.toml` sets `python_files = ["test_*.py"]`. Each one runs with `uv run python tests/<name>.py`.
+- `uv run ty check` without a path also checks `tests/`, where ty reports two errors: `tests/test_sci_hub.py` passes a `MockResponse` where `SciHubFetcher._generate_filename` expects a `requests.Response`.
+- `uv run paper-search-mcp` starts the MCP server on stdio. The server reads MCP messages from stdin, so in a terminal it waits for input.
+- `uv run paper-search` runs the CLI, with the subcommands `search`, `download`, `read`, and `sources`.
+
+<!-- Correct these commands once the project runs. Add anything a new session would otherwise have to work out, such as a required environment variable, a database that must be running, or a fixture that must be generated first. -->
 
 ## Directory structure
 
 ```
 paper-search-mcp/
-├── pyproject.toml, uv.lock          — package definition + lockfile (no src/ layout — package is at repo root)
-├── CLAUDE.md                        — this file
-├── paper_search_mcp/                — the installable package
-│   ├── server.py                    — MCP server entry point (paper-search-mcp)
-│   ├── cli.py                       — CLI entry point (paper-search)
-│   ├── config.py                    — env var / .env loading (PAPER_SEARCH_MCP_* prefix)
-│   ├── paper.py                     — shared Paper data model
-│   ├── utils.py                     — shared helpers
-│   └── academic_platforms/          — one module per source (arxiv, pubmed, crossref, ...)
-├── tests/                           — pytest suite, one file per platform + server/fallback/entrypoint tests
-└── docs/                            — ROADMAP.md, EXT-DEPS.md, superpowers/{plans,specs}
+├── pyproject.toml, uv.lock  — package definition and lockfile
+├── CLAUDE.md                — this file
+├── paper_search_mcp/        — the installable package, at the repository root (no src/ directory)
+│   ├── server.py            — MCP server and its tools; entry point `paper-search-mcp`
+│   ├── cli.py               — the CLI; entry point `paper-search`
+│   ├── config.py            — reads the `PAPER_SEARCH_MCP_*` variables and the environment file
+│   ├── paper.py             — `Paper`, the dataclass of a paper record
+│   ├── utils.py             — `extract_doi`, which finds a DOI in a text or a URL
+│   └── academic_platforms/  — one module per source, with its searcher class, and base.py,
+│                              oaipmh.py, sci_hub.py, and chemrxiv.py (docs/architecture.md, section 5.2)
+├── tests/                   — pytest suite: a test file for most sources, and tests of
+│                              the server, `download_with_fallback`, config.py, and the entry points
+├── docs/                    — architecture.md, specs/, images/
+├── claude-code/             — SKILL.md, a Claude Code skill that describes the `paper-search` command
+├── .github/workflows/       — publish.yml, which publishes the package to PyPI on a version tag
+├── Dockerfile               — container image that runs `paper-search-mcp`
+├── smithery.yaml            — Smithery configuration of the server
+└── .env.example             — the optional environment variables, to copy to ~/.config/paper-search-mcp/.env
 ```
 
-## Adding a new module
+<!-- One line per top-level module or directory. Update the block when a module is added or moved. A new session uses it to find a module without searching the file tree. -->
 
-1. Create the file in the right place under the layout in Directory
-   structure above.
-2. Wire it into the package's public surface, if it has one — `__init__.py`
-   exports, `mod.rs`, `index.ts`, whatever this language uses.
-3. Add a one-line entry for it in the Directory structure block above.
+## Adding a module
 
-## Working style
+1. Create the file where the directory structure above places it.
+2. `paper_search_mcp/__init__.py` exports nothing, so the package has no public API to add the module to. A new source module is registered in `server.py`: a searcher instance, its name in `ALL_SOURCES`, a branch in `search_papers`, its tools, and its entry in `primary_downloaders` in `download_with_fallback`. Its name is also added to the lists of source names in the docstrings of `search_papers` and `download_with_fallback`, because `FastMCP` sends each docstring to MCP clients as the tool's description. In `cli.py`, the module is registered in `_init_searchers` and `ALL_SOURCES`.
+3. Add a line for the module to the directory structure above.
+4. Add the module to the building block view in `docs/architecture.md`.
 
-- **OOP by default.** Functional where the problem is genuinely a transformation
-  pipeline — if you go functional in a module, note why here.
-  <!-- TODO: record any deliberate paradigm departures -->
-- **Never mutate inputs.** Return new objects.
-- **Type annotations on every function signature.** The default ruff selection
-  (`E`, `F`, `I`) only checks that annotations are *present*, not that they're
-  *correct* — `uv run ty check paper_search_mcp/` (ty) is what actually checks the types.
-- **Small, targeted edits and targeted test runs** while iterating; full suite
-  before committing. Keeping the loop fast is what keeps the checks in use.
-- **Files:** 200–400 lines comfortable, 800 the ceiling. Many small focused
-  modules over few large ones, but don't split below the point where navigation
-  costs more than it saves.
-- **Handle errors explicitly.** No silently swallowed exceptions. Validate at
-  system boundaries — anything from a user, a file, an API, or the network.
-- **No hardcoded secrets.** Environment variables, and record them in
-  `docs/EXT-DEPS.md`.
-- No palette/design-token guidance applies here — this is an MCP server and
-  CLI with no UI surface.
+## Code
 
-## Comment and docstring density
+- Object-oriented code is the default. A module that transforms input data into output data, with no state worth naming, is written as functions. Its entry in the building block view states this.
+- Functions return new objects and leave their inputs unchanged.
+- In Python, each function signature that a change adds or edits in `paper_search_mcp/` has type annotations, and ty checks the types. `pyproject.toml` selects Ruff's `E`, `F`, and `I` rules, which do not check that annotations exist. `uv run ruff check --select ANN paper_search_mcp/` lists the parameters and return values that have no annotation, and the parameters annotated with `Any`. Section 11 of `docs/architecture.md` describes the signatures without annotations in the current code.
+- A caught exception is handled, or re-raised with context. Data is validated where it enters the system: from a user, a file, an API, or the network.
+- Secrets are read from environment variables. The deployment view in `docs/architecture.md` lists those variables.
+- Each module hides one design decision, in Parnas's sense of information hiding: a change to that decision requires edits to that module only. A design decision is a choice such as a file format, a database schema, an algorithm, or the interface of an external service. Each module that a change adds or edits has a docstring that names the decision. `uv run ruff check --select D100,D104 paper_search_mcp/` lists the modules and the package `__init__.py` files that have no docstring; section 11 of `docs/architecture.md` describes those in the current code. New code goes into the module that hides the decision the code depends on. When no module hides that decision, propose a new module to the user. The length of a module is not a reason to split it.
 
-Comments and docstrings are good, **in moderation**. The calibration:
+## Tests
 
-- a **module docstring** stating what the module is and the *why* a reader
-  cannot recover from the code — a cost model, a non-obvious constraint
-  between two subsystems, what gets written where;
-- **function docstrings of one to three lines**, carrying the contract and
-  any non-obvious constraint a caller couldn't derive from the signature;
-- **no docstring at all** on a private helper whose name and signature
-  already say what it does;
-- **inline comments only where the code is genuinely surprising** — a line
-  explaining why a count or a threshold works the way it does, not a line
-  restating what the next line already says.
-
-What to avoid: narrating decision history, arguing with alternatives that
-weren't chosen, cross-referencing three other modules mid-paragraph,
-restating the code in English, or explaining the same thing in both a
-class docstring and its methods'.
-
-**A long docstring is usually a design smell.** It's generally explaining
-why something confusing is the way it is, and the right fix is to make it
-not confusing. Design rationale belongs in `docs/` and the dated records
-under `docs/superpowers/specs/`, not in the code — the code carries the
-contract and the surprises, and nothing else.
-
-This applies to new code and to code being edited for another reason. It is
-not a licence to strip comments from files not otherwise being touched.
-
-`paper_search_mcp/academic_platforms/arxiv.py` is the calibration — read it
-before writing prose in this codebase, and match its density.
+- Test a module through the functions that other modules call. Before writing a test, look for an existing test of the same behaviour, and extend that test instead of adding another.
+- For a feature or a bug fix, write the test first and see it fail on its assertion: against the code with the bug, or against a stub that returns a wrong value. Then write the implementation and see the test pass. A failure caused by a missing function or module does not show that the assertion can fail.
+- While working, run the tests for the code being changed. Run the full suite once before merging a branch, and again only if a file has changed since that run.
 
 ## Logging
 
-- **The language's logging facility, not print/console output, for
-  diagnostics.** A command's actual result — the thing piped to another tool
-  or read as the answer — stays on stdout; progress, warnings, and what a
-  routine is doing go through logging.
-- **One central place configures logging**, called once per run at the
-  entry point. Every other module just gets its own logger
-  (`logging.getLogger(__name__)` in Python) and never attaches a handler —
-  attaching handlers per-module means the same line gets logged twice the
-  moment two modules touch the same logger hierarchy.
-- **Log files are gitignored**, one directory per subsystem or run, so they
-  stay searchable instead of one undifferentiated stream.
-- **Before adding logging to code you're touching, check what it already
-  logs.** New logging that duplicates or collides with an existing stream is
-  worse than none — it looks like signal but is noise.
-
-No central config exists yet — each `academic_platforms/*.py` module's
-`logging.basicConfig(...)` call under its own `if __name__ == "__main__":`
-self-test block is local to that script, not shared. If server-wide logging
-configuration is added, it belongs once at the entry point (`server.py`'s
-`main()` or `cli.py`'s `main()`), not per-module.
-
-## Development modes
-
-- **Features and bugfixes → TDD.** Test first, watch it fail, minimal
-  implementation, watch it pass, refactor. 80% coverage floor.
-- **Small fixes → just do it in a branch.** No plan document, no full-suite run,
-  no whole-repo review. Judge by risk, not line count.
-- Invoke `superpowers-extended-cc:systematic-debugging` the moment something
-  behaves unexpectedly, before proposing a fix.
+- Code reports progress, warnings, and errors through a module logger, `logging.getLogger(__name__)`, and not with `print()`. The MCP server writes its MCP messages to stdout, and the CLI writes the result of each subcommand to stdout, so text printed to stdout is mixed into them. Section 8 of `docs/architecture.md` describes the logging configuration of each process.
 
 ## Git
 
-- **`main`, never `master`.**
-- Commit with the user's git identity as the author. **Do not add a
-  `Co-Authored-By` trailer or a "Generated with" footer.**
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
-  `chore:`, `perf:`.
-- Push and open PRs only when asked, under the user's own `gh` login.
-
-## Solo project workflow
-
-An individual project, not a team repository — no separate human reviewer is
-required before merging. Concretely:
-
-- Feature work happens on a branch, merged back once tests pass and the
-  change is verified. Merge it (or open then merge a PR) and delete the
-  branch afterward — a PR is a convenience for history and diffing, not a
-  required gate.
-- Prefer merge commits when landing a branch over squashing — it keeps the
-  per-task commit granularity.
-- Still confirm before genuinely destructive or irreversible actions —
-  discarding unmerged work, force-pushing, rewriting shared history.
-  "Merge my finished, reviewed branch" is not one of those.
-
-## Writing conventions
-
-- **Documentation** (`docs/*.md`, `README.md`, other prose files): British/GB
-  English spelling and grammar. Code fences and inline code (identifiers,
-  flags, filenames) keep their literal spelling regardless.
-- **Source code comments and docstrings:** American English — the software
-  default.
-- **Oxford comma** in comments, documentation, and markdown.
-- **`README.md`** additionally avoids em-dashes — use `' - '`
-  (space-hyphen-space) instead.
+- The default branch is `main`.
+- Commits use the user's git identity as the author. Do not add a `Co-Authored-By` trailer to commits or a "Generated with" line to PR descriptions.
+- Commit messages use the conventional commit prefixes `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, and `perf:`. A merge commit has git's default message, `Merge branch '<branch>'`.
+- Pushes and PRs use the user's own `gh` login.
 
 ## Before calling work done
 
-1. Full test suite passes — report real output, not a summary.
-2. Lint, format, and type checks clean.
-3. `docs/EXT-DEPS.md` updated if anything external was added.
-4. `docs/ROADMAP.md` updated: delivered items crossed off, new ideas captured,
-   deferred work recorded with its reason.
-5. This file updated if any command or assumption above changed.
+1. The tests pass, run as the Tests section describes. Report the output as printed.
+2. Lint, format, and type checks report no issues.
+3. `docs/architecture.md` describes the system as changed.
+4. This file is updated if a command or an assumption in it has changed.
 
-## Docs
+## Comment and docstring reference
 
-`docs/` itself is living documentation — canonical for its subject, kept
-current, and fixed in place when the code moves rather than re-explained
-here. `docs/superpowers/` holds dated records instead: written during a
-specific piece of work and left alone afterwards, so treat a claim in one as
-true when it was written, and verify it against the code before relying on
-it.
-
-- `docs/ROADMAP.md` — future ideas, plans spanning multiple cycles, and a
-  separate section for deliberately deferred work.
-- `docs/EXT-DEPS.md` — everything external that must exist for this to run.
-- `docs/superpowers/plans/` and `docs/superpowers/specs/` — dated planning
-  and design records, one pair per piece of work.
+<!-- Once a file has the comment and docstring density that this project should follow, name it here. Example: "`src/foo/bar.py` is the reference for comment and docstring density." -->
