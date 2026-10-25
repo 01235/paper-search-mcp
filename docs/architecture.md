@@ -153,7 +153,7 @@ Development tools are needed to develop the project and not to run it.
 | Tool | Install | Purpose |
 |---|---|---|
 | pre-commit | `uv tool install pre-commit`, then `pre-commit install` | Runs the hooks in `.pre-commit-config.yaml` before each commit: ruff with `--fix`, the ruff formatter, fixers for trailing whitespace and a missing final newline, and checks for YAML and TOML syntax, large files, merge conflict markers, and private keys. The hooks use the ruff version that `.pre-commit-config.yaml` pins, which can differ from the version in `uv.lock`. The second command installs the git hook; the configuration file alone has no effect. |
-| pytest, ruff, ty | `uv sync` installs them from the `dev` dependency group | Tests, linting and formatting, and type checking. ty is run by hand, with `uv run ty check paper_search_mcp/`, and no pre-commit hook runs it: ty is in beta and has no automatic fixes, so a hook would block a commit on errors that the commit did not cause. |
+| pytest, ruff, ty | `uv sync` installs them from the `dev` dependency group | Tests, linting and formatting, and type checking. ty is run by hand, with `uv run ty check paper_search_mcp/`. No pre-commit hook runs it, so that type errors in files that a commit does not change do not block that commit. |
 
 ### Setup
 
@@ -194,7 +194,7 @@ Every setting is an environment variable whose name is `PAPER_SEARCH_MCP_` follo
 
 ### Logging and standard output
 
-Every module that logs, apart from `sci_hub.py`, creates a module logger with `logging.getLogger(__name__)` and attaches no handler. A logger passes each log record to its own handlers and to the handlers of its parent loggers, so a handler attached in a module, in addition to a handler higher in the logger hierarchy, would write each log record twice. `SciHubFetcher` in `sci_hub.py` logs with the functions `logging.error`, `logging.warning`, and `logging.debug`, which log through the root logger, so its log records have the logger name `root`.
+Every module that logs, apart from `sci_hub.py`, creates a module logger with `logging.getLogger(__name__)` and attaches no handler. A logger passes each log record to its own handlers and to the handlers of its ancestor loggers, so a handler attached in a module, in addition to a handler higher in the logger hierarchy, would write each log record twice. `SciHubFetcher` in `sci_hub.py` logs with the functions `logging.error`, `logging.warning`, and `logging.debug`, which log through the root logger, so its log records have the logger name `root`.
 
 Importing `server.py` configures logging: `FastMCP(...)` calls `logging.basicConfig`, which gives the root logger level INFO and a handler that writes to stderr. Because the root logger then has a handler, a later `logging.basicConfig` call has an effect only with `force=True`. No other module of the package configures logging when it is imported. In the CLI, nothing configures logging: Python's last-resort handler writes each log record of level WARNING or above to stderr as its message text alone, and log records below WARNING are not written.
 
