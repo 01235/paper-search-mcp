@@ -1,6 +1,6 @@
 # paper-search-mcp
 
-An MCP server that searches for academic papers in multiple sources and downloads them, with a command-line interface to the same sources.
+An MCP server that searches for academic papers in multiple sources and downloads them, with a command-line interface (CLI) to the same sources.
 
 **Stack:** python · cli
 
@@ -14,7 +14,7 @@ The imported file below describes the modes of work, how specs and code are revi
 
 - The operating system is Windows 10. PowerShell is the primary shell. Bash (Git Bash) is also available and uses a different syntax. PowerShell 5.1 has no `&&` chaining, no `2>/dev/null`, and no Bash heredocs (`<<EOF`). Its here-strings are written `@'...'@`.
 - Paths contain spaces. Quote them.
-- uv manages Python, the virtual environment, and the dependencies: `uv add` adds a dependency and `uv run` runs a command in the project environment. A CLI tool is installed with `uv tool install --editable .`, so that edits to the source take effect without reinstalling.
+- uv manages Python, the virtual environment, and the dependencies: `uv add` adds a dependency and `uv run` runs a command in the project environment. `uv tool install --editable .` installs the commands `paper-search-mcp` and `paper-search`, so that edits to the source take effect without reinstalling.
 - On Windows, Python reads and writes text in the system code page unless a call sets the encoding. Non-ASCII text then raises `UnicodeEncodeError` or `UnicodeDecodeError`. Set UTF-8 before the first input or output:
   - call `sys.stdout.reconfigure(encoding="utf-8")` and `sys.stderr.reconfigure(encoding="utf-8")` at the top of `main()` in `server.py` and in `cli.py`, before anything prints;
   - pass `encoding="utf-8"` to every `open()`, `read_text()`, and `write_text()` call.
@@ -49,11 +49,11 @@ uv run paper-search
 ```
 
 - `uv sync` installs the package, its dependencies, and the `dev` dependency group (pytest, ruff, and ty) into the project environment.
-- Many test files call the live APIs of the sources, so `uv run pytest` needs network access. Most of these files skip a test when the API does not answer. `tests/test_pubmed.py` and `tests/test_server.py` do not skip, so they fail without network access. The four test files that `.github/workflows/publish.yml` runs need no network access.
-- `tests/e2e_test.py` and `tests/functional_test.py` are scripts that call the live API of every source. Pytest does not collect them, because `pyproject.toml` sets `python_files = ["test_*.py"]`. Each one runs with `uv run python tests/<name>.py`.
+- Many test files call the live APIs of the sources, so `uv run pytest` needs network access. Most of these files skip a test when the API does not answer. `tests/test_pubmed.py` and `tests/test_server.py` do not skip, so they fail without network access. The test files that `.github/workflows/publish.yml` runs need no network access: `tests/test_package_entrypoints.py`, `tests/test_config_env.py`, `tests/test_unpaywall.py`, and `tests/test_unpaywall_source.py`.
+- `tests/e2e_test.py` and `tests/functional_test.py` are scripts that call the live APIs of the sources. Neither script calls IEEE Xplore or the ACM Digital Library, and `tests/functional_test.py` also leaves out OpenAlex. Pytest does not collect them, because `pyproject.toml` sets `python_files = ["test_*.py"]`. Each one runs with `uv run python tests/<name>.py`.
 - `uv run ty check` without a path also checks `tests/`, where ty reports two errors: `tests/test_sci_hub.py` passes a `MockResponse` where `SciHubFetcher._generate_filename` expects a `requests.Response`.
 - `uv run paper-search-mcp` starts the MCP server on stdio. The server reads MCP messages from stdin, so in a terminal it waits for input.
-- `uv run paper-search` runs the command-line interface, with the subcommands `search`, `download`, `read`, and `sources`.
+- `uv run paper-search` runs the CLI, with the subcommands `search`, `download`, `read`, and `sources`.
 
 <!-- Correct these commands once the project runs. Add anything a new session would otherwise have to work out, such as a required environment variable, a database that must be running, or a fixture that must be generated first. -->
 
@@ -65,11 +65,12 @@ paper-search-mcp/
 ├── CLAUDE.md                — this file
 ├── paper_search_mcp/        — the installable package, at the repository root (no src/ directory)
 │   ├── server.py            — MCP server and its tools; entry point `paper-search-mcp`
-│   ├── cli.py               — command-line interface; entry point `paper-search`
+│   ├── cli.py               — the CLI; entry point `paper-search`
 │   ├── config.py            — reads the `PAPER_SEARCH_MCP_*` variables and the environment file
 │   ├── paper.py             — `Paper`, the dataclass of a paper record
 │   ├── utils.py             — `extract_doi`, which finds a DOI in a text or a URL
-│   └── academic_platforms/  — one module per source; base.py defines `PaperSource`
+│   └── academic_platforms/  — one module per source, with its searcher class, and base.py,
+│                              oaipmh.py, sci_hub.py, and chemrxiv.py (docs/architecture.md, section 5.2)
 ├── tests/                   — pytest suite: a test file for most sources, and tests of
 │                              the server, `download_with_fallback`, config.py, and the entry points
 ├── docs/                    — architecture.md, specs/, images/
@@ -85,7 +86,7 @@ paper-search-mcp/
 ## Adding a module
 
 1. Create the file where the directory structure above places it.
-2. `paper_search_mcp/__init__.py` exports nothing, so the package has no public API to add the module to. A new source module is registered in `server.py` (a searcher instance, its name in `ALL_SOURCES`, a branch in `search_papers`, its tools, and its entry in `primary_downloaders` in `download_with_fallback`) and in `cli.py` (`_init_searchers` and `ALL_SOURCES`).
+2. `paper_search_mcp/__init__.py` exports nothing, so the package has no public API to add the module to. A new source module is registered in `server.py`: a searcher instance, its name in `ALL_SOURCES`, a branch in `search_papers`, its tools, and its entry in `primary_downloaders` in `download_with_fallback`. Its name is also added to the lists of source names in the docstrings of `search_papers` and `download_with_fallback`, because `FastMCP` sends each docstring to MCP clients as the tool's description. In `cli.py`, the module is registered in `_init_searchers` and `ALL_SOURCES`.
 3. Add a line for the module to the directory structure above.
 4. Add the module to the building block view in `docs/architecture.md`.
 
@@ -106,9 +107,7 @@ paper-search-mcp/
 
 ## Logging
 
-- Code reports progress, warnings, and errors through a module logger, `logging.getLogger(__name__)`, and not with `print()`. The MCP server writes its MCP messages to stdout, and the CLI writes each command's result to stdout, so text printed to stdout is mixed into them. Section 8 of `docs/architecture.md` describes the logging configuration of each process.
-- Before adding a log call, read what the code already logs. A message that repeats an existing message, or reports the same event in other words, adds output that a reader takes for new information.
-- If a logging configuration is added for the package, it is added at the top of `main()` in `server.py` and in `cli.py`, once in each, and other modules only create their logger. In the server, `FastMCP(...)` calls `logging.basicConfig` when `server.py` is imported, so a later `basicConfig` call has an effect only with `force=True`.
+- Code reports progress, warnings, and errors through a module logger, `logging.getLogger(__name__)`, and not with `print()`. The MCP server writes its MCP messages to stdout, and the CLI writes the result of each subcommand to stdout, so text printed to stdout is mixed into them. Section 8 of `docs/architecture.md` describes the logging configuration of each process.
 
 ## Git
 
