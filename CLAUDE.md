@@ -94,10 +94,10 @@ paper-search-mcp/
 
 - Object-oriented code is the default. A module that transforms input data into output data, with no state worth naming, is written as functions. Its entry in the building block view states this.
 - Functions return new objects and leave their inputs unchanged.
-- In Python, every function signature in `paper_search_mcp/` has type annotations. `pyproject.toml` selects Ruff's `E`, `F`, and `I` rules, which do not check that annotations exist, and ty checks the types.
+- In Python, each function signature that a change adds or edits in `paper_search_mcp/` has type annotations, and ty checks the types. `pyproject.toml` selects Ruff's `E`, `F`, and `I` rules, which do not check that annotations exist. `uv run ruff check --select ANN paper_search_mcp/` lists the parameters and return values that have no annotation, and the parameters annotated with `Any`. Section 11 of `docs/architecture.md` describes the signatures without annotations in the current code.
 - A caught exception is handled, or re-raised with context. Data is validated where it enters the system: from a user, a file, an API, or the network.
 - Secrets are read from environment variables. The deployment view in `docs/architecture.md` lists those variables.
-- Each module hides one design decision, in Parnas's sense of information hiding: a change to that decision requires edits to that module only. A design decision is a choice such as a file format, a database schema, an algorithm, or the interface of an external service. The module docstring names the decision. New code goes into the module that hides the decision the code depends on. When no module hides that decision, propose a new module to the user. The length of a module is not a reason to split it.
+- Each module hides one design decision, in Parnas's sense of information hiding: a change to that decision requires edits to that module only. A design decision is a choice such as a file format, a database schema, an algorithm, or the interface of an external service. Each module that a change adds or edits has a docstring that names the decision. `uv run ruff check --select D100,D104 paper_search_mcp/` lists the modules and the package `__init__.py` files that have no docstring; section 11 of `docs/architecture.md` describes those in the current code. New code goes into the module that hides the decision the code depends on. When no module hides that decision, propose a new module to the user. The length of a module is not a reason to split it.
 
 ## Tests
 
