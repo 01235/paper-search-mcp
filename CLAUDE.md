@@ -15,9 +15,9 @@ The imported file below describes the modes of work, how specs and code are revi
 - The operating system is Windows 10. PowerShell is the primary shell. Bash (Git Bash) is also available and uses a different syntax. PowerShell 5.1 has no `&&` chaining, no `2>/dev/null`, and no Bash heredocs (`<<EOF`). Its here-strings are written `@'...'@`.
 - Paths contain spaces. Quote them.
 - uv manages Python, the virtual environment, and the dependencies: `uv add` adds a dependency and `uv run` runs a command in the project environment. `uv tool install --editable .` installs the commands `paper-search-mcp` and `paper-search`, so that edits to the source take effect without reinstalling.
-- On Windows, Python reads and writes text in the system code page unless a call sets the encoding. Non-ASCII text then raises `UnicodeEncodeError` or `UnicodeDecodeError`. Set UTF-8 before the first input or output:
+- On Windows, Python uses the ANSI code page for standard input, output, and error when they are a pipe or a file, for example when another program captures the output, and for `open()` without an `encoding` argument. On a machine whose ANSI code page is not UTF-8 (65001), writing a character that the code page does not contain then raises `UnicodeEncodeError`, and reading UTF-8 text returns wrong characters or raises `UnicodeDecodeError`. Set UTF-8 before the first input or output, so that the code behaves the same on every machine:
   - call `sys.stdout.reconfigure(encoding="utf-8")` and `sys.stderr.reconfigure(encoding="utf-8")` at the top of `main()` in `server.py` and in `cli.py`, before anything prints;
-  - pass `encoding="utf-8"` to every `open()`, `read_text()`, and `write_text()` call.
+  - pass `encoding="utf-8"` to every `open()` in text mode, and to every `read_text()` and `write_text()` call. A binary-mode `open()` takes no encoding.
 
   Rust and Node use UTF-8 by default.
 
@@ -113,7 +113,7 @@ paper-search-mcp/
 
 - The default branch is `main`.
 - Commits use the user's git identity as the author. Do not add a `Co-Authored-By` trailer to commits or a "Generated with" line to PR descriptions.
-- Commit messages use the conventional commit prefixes `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, and `perf:`.
+- Commit messages use the conventional commit prefixes `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, and `perf:`. A merge commit has git's default message, `Merge branch '<branch>'`.
 - Pushes and PRs use the user's own `gh` login.
 
 ## Before calling work done
@@ -125,4 +125,4 @@ paper-search-mcp/
 
 ## Comment and docstring reference
 
-`paper_search_mcp/academic_platforms/arxiv.py` is the reference for comment and docstring density.
+<!-- Once a file has the comment and docstring density that this project should follow, name it here. Example: "`src/foo/bar.py` is the reference for comment and docstring density." -->
